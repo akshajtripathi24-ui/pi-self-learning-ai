@@ -1,0 +1,336 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pi Self-Learning AI</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧠</text></svg>">
+<style>
+:root{--bg:#070b16;--card:#0f172a;--line:#1e293b;--text:#e2e8f0;--muted:#94a3b8;--accent:#22d3ee;--good:#4ade80;--warn:#fbbf24;--bad:#f87171;--s1:#3987e5;--s2:#d95926}
+*{box-sizing:border-box}
+body{margin:0;background:radial-gradient(ellipse at top,#0b1430 0%,var(--bg) 60%);color:var(--text);font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;min-height:100vh}
+header{display:flex;align-items:center;gap:12px;padding:14px 20px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+header h1{font-size:20px;margin:0;font-weight:800}
+.tabs{display:flex;gap:6px;flex-wrap:wrap;margin-left:auto}
+.tabs button{background:transparent;color:var(--muted);border:1px solid var(--line)}
+.tabs button.on{background:#0b2530;color:var(--accent);border-color:#155e75}
+main{max-width:1200px;margin:0 auto;padding:16px;display:grid;gap:16px;grid-template-columns:2fr 1fr}
+@media(max-width:900px){main{grid-template-columns:1fr}.tabs{margin-left:0}}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;min-width:0}
+.card h2{font-size:15px;margin:0 0 12px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.06em}
+.full{grid-column:1/-1}
+.muted{color:var(--muted);font-size:14px}
+button,select,input{font-family:inherit}
+button{background:var(--accent);color:#04131a;border:0;border-radius:8px;padding:8px 13px;font-weight:800;cursor:pointer;font-size:14px}
+button.ghost{background:transparent;color:var(--accent);border:1px solid #155e75}
+button.small{padding:5px 10px;font-size:13px}
+button:disabled{opacity:.4;cursor:default}
+select,input[type=number],input[type=text]{padding:7px 9px;border-radius:8px;border:1px solid var(--line);background:#0b1222;color:var(--text);font-size:14px}
+.bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:10px}
+.stats{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.stat{background:#0b1222;border:1px solid var(--line);border-radius:10px;padding:9px 11px}
+.stat .k{font-size:12px;color:var(--muted)}.stat .v{font-size:19px;font-weight:800;margin-top:2px}
+.big{font-size:34px;font-weight:900;color:var(--accent);line-height:1.1}
+.levels{display:flex;gap:5px;margin:8px 0 4px}
+.levels span{flex:1;height:8px;border-radius:4px;background:#1e293b}
+.levels span.done{background:var(--accent)}.levels span.now{background:#155e75;box-shadow:0 0 0 1px var(--accent) inset}
+.feed{list-style:none;padding:0;margin:0;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+.feed li{display:flex;justify-content:space-between;gap:10px;padding:6px 4px;border-bottom:1px solid var(--line);font-size:16px}
+.feed li .r{color:var(--muted);font-size:13px}
+.ok{color:var(--good)}.no{color:var(--bad)}
+.qa{border-bottom:1px solid var(--line);padding:10px 0;font-size:14px}
+.qa .p{color:var(--text)}.qa .m{color:var(--muted);font-family:ui-monospace,monospace;font-size:13px;margin-top:4px}
+.chart{position:relative}
+.chart svg{display:block;width:100%;height:auto;touch-action:pan-y}
+.chart .axis{fill:var(--muted);font-size:11px}.chart .gridl{stroke:#1e293b;stroke-width:1}
+.tip{position:absolute;pointer-events:none;background:#0b1222;border:1px solid #334155;border-radius:8px;padding:6px 9px;font-size:12px;white-space:nowrap;display:none;color:var(--text)}
+.legend{display:flex;gap:16px;font-size:13px;color:var(--muted);margin:2px 0 6px;flex-wrap:wrap}
+.legend i{display:inline-block;width:14px;height:3px;border-radius:2px;vertical-align:middle;margin-right:6px}
+.skill{display:grid;grid-template-columns:180px 1fr 48px;gap:10px;align-items:center;margin:7px 0;font-size:14px}
+.skill .track{height:12px;background:#1e293b;border-radius:6px;overflow:hidden}.skill .fill{height:100%;background:var(--s1);border-radius:6px}
+@media(max-width:500px){.skill{grid-template-columns:120px 1fr 40px;font-size:12px}}
+.heat{border-collapse:collapse;margin-top:10px;font-family:ui-monospace,monospace}
+.heat td,.heat th{width:30px;height:28px;text-align:center;font-size:13px;border:1px solid #0f172a}
+.heat th{color:var(--muted);font-weight:600}
+.progress{height:10px;background:#1e293b;border-radius:5px;overflow:hidden;margin:10px 0}.progress div{height:100%;background:var(--accent)}
+.round{border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-top:10px;background:#0b1222}
+.round h3{margin:0 0 6px;font-size:14px}.round ul{margin:6px 0 0;padding-left:18px;font-family:ui-monospace,monospace;font-size:13px;color:#cbd5e1}
+.check{display:flex;align-items:center;gap:8px;margin-top:10px;font-size:14px}
+label{display:block;font-size:13px;color:var(--muted);margin:10px 0 4px}
+.row{display:flex;gap:10px;flex-wrap:wrap}.row>div{flex:1;min-width:110px}.row input,.row select{width:100%}
+.msg{font-size:13px;margin-top:8px;min-height:18px}
+.pill{font-size:12px;padding:4px 10px;border-radius:999px;background:#0b2530;color:var(--accent);border:1px solid #155e75}
+.pill.warn{background:#2a1f05;color:var(--warn);border-color:#854d0e}.pill.off{background:#1f2937;color:var(--muted);border-color:#334155}
+table.t{border-collapse:collapse;font-size:13px;width:100%}.t td,.t th{padding:5px 6px;border-bottom:1px solid var(--line);text-align:left}.t th{color:var(--muted);font-weight:600}
+code{background:#0b1222;border:1px solid var(--line);padding:2px 6px;border-radius:6px;font-size:13px}
+footer{text-align:center;color:var(--muted);font-size:12px;padding:20px}footer a{color:var(--muted)}
+.hide{display:none!important}
+</style>
+</head>
+<body>
+<header>
+  <h1>🧠 Pi Self-Learning AI</h1>
+  <div class="tabs"><button id="tab-math" class="on">🧮 Math AI</button><button id="tab-bot">💬 Chatbot</button><button id="tab-col">🔬 Collapse experiment</button></div>
+</header>
+
+<!-- ============================================================ part 1: the self-taught math AI -->
+<main id="page-math">
+  <section class="card">
+    <h2>🧮 Quizzing itself, live</h2>
+    <p class="muted" style="margin-top:0">A tiny GPT that started knowing nothing. It writes its own questions (mostly about what it's worst at), answers them, and a calculator checks every answer. Then it learns from the right answers. 📒 = a question from its notebook of past mistakes.</p>
+    <ul class="feed" id="feed"><li class="muted">Starting…</li></ul>
+  </section>
+  <section class="card">
+    <h2>Progress</h2>
+    <div class="muted">Level <b id="mlvlnum" style="color:var(--text)">-</b></div>
+    <div class="big" id="mlvlname" style="font-size:22px">-</div>
+    <div class="levels" id="mlvlbar"></div>
+    <div class="stats" style="margin-top:12px">
+      <div class="stat"><div class="k">Questions it asked itself</div><div class="v" id="mq">-</div></div>
+      <div class="stat"><div class="k">Last test score</div><div class="v" id="mtest">-</div></div>
+      <div class="stat"><div class="k">Mistakes in its notebook</div><div class="v" id="mnote">-</div></div>
+      <div class="stat"><div class="k">Time spent learning</div><div class="v" id="mtime">-</div></div>
+      <div class="stat"><div class="k">Speed</div><div class="v" id="mspeed">-</div></div>
+      <div class="stat"><div class="k">Brain size</div><div class="v" id="msize">-</div></div>
+    </div>
+    <div class="bar"><button class="ghost small" id="mpause">⏸️ Pause</button><button class="ghost small" id="mreset">⚠️ Start over</button></div>
+  </section>
+  <section class="card full">
+    <h2>📈 Test scores</h2>
+    <div class="legend"><span><i style="background:var(--s1)"></i>Score on a test of 300 new questions</span><span><i style="background:#64748b"></i>97% needed to level up</span></div>
+    <div class="chart" id="mchart"></div>
+  </section>
+  <section class="card">
+    <h2>🎯 Its weak spots (this level)</h2>
+    <div id="skills"></div>
+    <p class="muted">How often it gets each kind of question right lately. It writes more questions about the low ones: that's how it decides what to practice.</p>
+  </section>
+  <section class="card">
+    <h2>🙋 Ask it a question</h2>
+    <div class="row"><div><input type="number" id="qa" min="0" max="999" value="47" aria-label="First number"></div>
+      <div style="flex:0 0 70px"><select id="qop" aria-label="Plus or minus"><option value="+">+</option><option value="-">−</option></select></div>
+      <div><input type="number" id="qb" min="0" max="999" value="38" aria-label="Second number"></div></div>
+    <button id="qgo" style="margin-top:10px">Ask</button>
+    <div id="qout" class="msg"></div>
+  </section>
+</main>
+
+<!-- ============================================================ part 2: the self-quizzing chatbot -->
+<main id="page-bot" class="hide">
+  <section class="card">
+    <h2>💬 The self-quizzing chatbot</h2>
+    <p class="muted" style="margin-top:0">A small ready-made AI language model, running on the Pi. It writes its own word problem (teacher), Python checks the math (checker), then it answers without seeing the math (student). Wrong answers go into its notebook. <b>Half</b> the time it reads similar notebook pages first, so we can see if the notebook really helps.</p>
+    <div class="bar"><span class="pill off" id="bconn">Not running</span></div>
+    <div class="bar"><button id="bstart">▶ Start practicing</button><button class="ghost small" id="breset">⚠️ Clear the notebook and scores</button></div>
+    <div id="bfeed" style="margin-top:8px"></div>
+  </section>
+  <section class="card">
+    <h2>Does the notebook help?</h2>
+    <div class="stats">
+      <div class="stat"><div class="k">📒 With the notebook</div><div class="v" id="bwith">-</div><div class="k" id="bwithn"></div></div>
+      <div class="stat"><div class="k">Without the notebook</div><div class="v" id="bwithout">-</div><div class="k" id="bwithoutn"></div></div>
+      <div class="stat"><div class="k">Practice rounds</div><div class="v" id="brounds">-</div></div>
+      <div class="stat"><div class="k">Bad questions thrown away</div><div class="v" id="bbad">-</div></div>
+    </div>
+    <p class="muted" id="bverdict"></p>
+    <label for="bmodel">Model</label><div class="row"><div><input type="text" id="bmodel"></div><div style="flex:0 0 auto"><button class="ghost small" id="bsave">Save</button></div></div>
+    <p class="muted" style="font-size:12px">It's slow on a Pi: each round takes about 15–60 seconds. Pause the Docking AI while it practices, so they don't fight over the processor.</p>
+  </section>
+  <section class="card full">
+    <h2>📈 Right answers: with vs without the notebook</h2>
+    <div class="legend"><span><i style="background:var(--s1)"></i>📒 With the notebook</span><span><i style="background:var(--s2)"></i>Without the notebook</span></div>
+    <div class="chart" id="bchart"></div>
+  </section>
+  <section class="card full">
+    <h2>📒 Its notebook (newest pages)</h2>
+    <div id="bnote"><p class="muted">Empty so far.</p></div>
+  </section>
+</main>
+
+<!-- ============================================================ part 3: model collapse -->
+<main id="page-col" class="hide">
+  <section class="card">
+    <h2>🔬 What happens when an AI learns from its own writing?</h2>
+    <p class="muted" style="margin-top:0"><b>Round 0:</b> a new tiny GPT learns to write from 100 real space and robot facts. <b>Round 1:</b> another new one learns <b>only</b> from sentences round 0 wrote. <b>Round 2</b> learns only from round 1… Nothing checks the sentences. Watch what happens!</p>
+    <div class="row">
+      <div><label for="crounds">Rounds</label><input type="number" id="crounds" min="2" max="10" value="6"></div>
+      <div><label for="ctemp">Creativity (temperature)</label><input type="number" id="ctemp" min="0.3" max="1.5" step="0.1" value="0.9"></div>
+    </div>
+    <div class="check"><input type="checkbox" id="ckeep"><label for="ckeep" style="margin:0">The fix: keep the real facts in every round's lessons</label></div>
+    <div class="bar"><button id="cstart">▶ Start the experiment</button><button class="ghost small" id="cstop">⏹️ Stop</button></div>
+    <div class="progress"><div id="cprog" style="width:0%"></div></div>
+    <div class="muted" id="cstatus">Each round takes a few minutes on a Pi. You can close the page; it keeps going.</div>
+    <div id="crounds-out"></div>
+  </section>
+  <section class="card">
+    <h2>What to watch</h2>
+    <p class="muted"><b style="color:var(--text)">Different words used:</b> how big its vocabulary still is. Collapse makes it shrink.</p>
+    <p class="muted"><b style="color:var(--text)">Different sentences:</b> how much it repeats itself. Lower = more repetition.</p>
+    <p class="muted"><b style="color:var(--text)">Real words:</b> how many of its words actually exist in the real facts.</p>
+    <p class="muted"><b style="color:var(--text)">Surprise at the real facts:</b> how strange the real sentences look to it. Higher = it has forgotten what real writing is like.</p>
+    <p class="muted">Then run it again with <b>keep the real facts</b> ticked and compare. That's why AI companies need fresh human writing, and why AI needs a checker.</p>
+  </section>
+  <section class="card full">
+    <h2>📈 Different words used, each round</h2>
+    <div class="legend" id="clegend"></div>
+    <div class="chart" id="cchart1"></div>
+    <h2 style="margin-top:16px">📈 Surprise at the real facts, each round</h2>
+    <div class="chart" id="cchart2"></div>
+  </section>
+</main>
+<footer>A student project. <a href="https://github.com/akshajtripathi24-ui/pi-self-learning-ai" target="_blank">Code and guide on GitHub</a></footer>
+
+<script>
+const $ = id => document.getElementById(id);
+const api = (p, opt) => fetch(p, opt).then(async r => { const j = await r.json(); if (!r.ok) throw new Error(j.error || r.status); return j; });
+const post = (p, body) => api(p, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body || {})});
+const esc = s => String(s).replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
+const fmtDur = s => s < 60 ? Math.round(s) + ' s' : s < 3600 ? Math.round(s / 60) + ' min' : s < 86400 ? (s / 3600).toFixed(1) + ' h' : (s / 86400).toFixed(1) + ' days';
+const store = {get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }, set(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }};
+
+// ---------------------------------------------------------------- tabs
+let tab = ['math', 'bot', 'col'].includes(store.get('tab')) ? store.get('tab') : 'math';
+function setTab(t) {
+  tab = t; store.set('tab', t);
+  ['math', 'bot', 'col'].forEach(k => { $('tab-' + k).classList.toggle('on', k === t); $('page-' + k).classList.toggle('hide', k !== t); });
+  refresh();
+}
+['math', 'bot', 'col'].forEach(k => $('tab-' + k).onclick = () => setTab(k));
+
+// ---------------------------------------------------------------- a line chart with a hover tooltip (one axis, recessive grid)
+function lineChart(box, series, o) {
+  const pts = series.flatMap(s => s.points);
+  if (!pts.length) { box.innerHTML = `<p class="muted">${o.empty || 'Nothing to show yet.'}</p>`; return; }
+  const Wd = Math.max(300, box.clientWidth || 700), Ht = o.height || 220, L = 42, R = 14, T = 12, B = 26;
+  const x0 = o.xMin != null ? o.xMin : Math.min(...pts.map(p => p[0])), x1 = Math.max(x0 + 1, ...pts.map(p => p[0]));
+  const yMax = o.yMax || Math.max(1, ...pts.map(p => p[1])) * 1.1;
+  const X = v => L + (v - x0) / (x1 - x0) * (Wd - L - R), Y = v => T + (1 - v / yMax) * (Ht - T - B);
+  let s = `<svg viewBox="0 0 ${Wd} ${Ht}" role="img" aria-label="${esc(o.label || 'chart')}">`;
+  const tick = o.yTick || Math.max(1, Math.round(yMax / 4));
+  for (let v = 0; v <= yMax + 1e-9; v += tick) s += `<line class="gridl" x1="${L}" x2="${Wd - R}" y1="${Y(v)}" y2="${Y(v)}"/><text class="axis" x="${L - 6}" y="${Y(v) + 4}" text-anchor="end">${Math.round(v * 100) / 100}${o.ySuffix || ''}</text>`;
+  const xt = o.xTicks || 4;
+  for (let k = 0; k <= xt; k++) { const v = Math.round(x0 + (x1 - x0) * k / xt); s += `<text class="axis" x="${X(v)}" y="${Ht - 8}" text-anchor="${k === 0 ? 'start' : k === xt ? 'end' : 'middle'}">${k === 0 && o.xName ? o.xName + ' ' : ''}${v.toLocaleString()}</text>`; }
+  if (o.ref != null) s += `<line x1="${L}" x2="${Wd - R}" y1="${Y(o.ref)}" y2="${Y(o.ref)}" stroke="#64748b" stroke-dasharray="4 4"/>`;
+  (o.markers || []).forEach(([x, t]) => { if (x >= x0 && x <= x1) s += `<line x1="${X(x)}" x2="${X(x)}" y1="${T}" y2="${Ht - B}" stroke="#475569" stroke-dasharray="3 4"/><text class="axis" x="${X(x) + 3}" y="${T + 10}">${esc(t)}</text>`; });
+  series.forEach(se => {
+    if (!se.points.length) return;
+    s += `<polyline fill="none" stroke="${se.color}" stroke-width="2" stroke-linejoin="round" ${se.dash ? 'stroke-dasharray="6 4"' : ''} points="${se.points.map(p => X(p[0]).toFixed(1) + ',' + Y(Math.min(yMax, p[1])).toFixed(1)).join(' ')}"/>`;
+    if (se.points.length < 30) se.points.forEach(p => s += `<circle cx="${X(p[0])}" cy="${Y(Math.min(yMax, p[1]))}" r="4" fill="${se.color}" stroke="#0f172a" stroke-width="2"/>`);
+  });
+  s += `<line class="cx" x1="0" x2="0" y1="${T}" y2="${Ht - B}" stroke="#94a3b8" style="display:none"/></svg><div class="tip"></div>`;
+  box.innerHTML = s;
+  const svg = box.querySelector('svg'), tip = box.querySelector('.tip'), cx = box.querySelector('.cx');
+  svg.addEventListener('pointermove', e => {
+    const rc = svg.getBoundingClientRect(), x = (e.clientX - rc.left) / rc.width * Wd;
+    const near = pts.reduce((a, b) => Math.abs(X(b[0]) - x) < Math.abs(X(a[0]) - x) ? b : a)[0];
+    cx.setAttribute('x1', X(near)); cx.setAttribute('x2', X(near)); cx.style.display = '';
+    tip.innerHTML = `<b>${esc(o.xName || '')} ${near.toLocaleString()}</b><br>` + series.map(se => { const p = se.points.find(q => q[0] === near); return p ? `<span style="color:${se.color}">●</span> ${esc(se.name)}: ${(+p[1]).toFixed(o.digits || 1)}${o.ySuffix || ''}` : ''; }).filter(Boolean).join('<br>');
+    tip.style.display = 'block';
+    tip.style.left = Math.min(rc.width - tip.offsetWidth, Math.max(0, X(near) / Wd * rc.width - tip.offsetWidth / 2)) + 'px'; tip.style.top = '0px';
+  });
+  svg.addEventListener('pointerleave', () => { tip.style.display = 'none'; cx.style.display = 'none'; });
+}
+
+// ---------------------------------------------------------------- part 1
+let math = null;
+async function loadMath() {
+  try { math = await api('/api/math'); } catch (e) { return; }
+  const m = math;
+  $('mlvlnum').textContent = `${m.level + 1} of ${m.levels.length}`;
+  $('mlvlname').textContent = m.mastered ? '🏆 Mastered everything!' : m.levels[m.level];
+  $('mlvlbar').innerHTML = m.levels.map((n, i) => `<span class="${i < m.level || m.mastered ? 'done' : i === m.level ? 'now' : ''}" title="Level ${i + 1}: ${esc(n)}"></span>`).join('');
+  $('mq').textContent = m.questions.toLocaleString();
+  const last = m.tests[m.tests.length - 1];
+  $('mtest').textContent = last ? last[2] + '%' : '-';
+  $('mnote').textContent = m.notebook;
+  $('mtime').textContent = fmtDur(m.seconds);
+  $('mspeed').textContent = m.paused ? 'Paused' : m.hot ? `🌡️ Cooling down (${m.temp} °C)` : m.per_minute ? m.per_minute.toLocaleString() + ' questions/min' : '-';
+  $('msize').textContent = m.size.toLocaleString() + ' numbers';
+  $('mpause').textContent = m.paused ? '▶️ Resume' : '⏸️ Pause';
+  $('feed').innerHTML = m.feed.map(f => `<li><span>${f.review ? '📒 ' : ''}${esc(f.q)} = ${f.answer == null ? '?' : f.answer}</span><span class="${f.ok ? 'ok' : 'no'}">${f.ok ? '✅' : '❌ <span class="r">(it\'s ' + f.truth + ')</span>'}</span></li>`).join('') || '<li class="muted">Starting…</li>';
+  $('skills').innerHTML = m.skills.map(s => `<div class="skill"><span>${esc(s.label)}</span><div class="track"><div class="fill" style="width:${s.acc}%"></div></div><b>${s.acc}%</b></div>`).join('');
+  lineChart($('mchart'), [{name: 'Test score', color: '#3987e5', points: m.tests.map(t => [t[0], t[2]])}],
+    {yMax: 100, yTick: 25, ySuffix: '%', ref: 97, xName: 'Round', label: 'Test scores', markers: m.level_ups.map(u => [u[0], 'L' + (u[1] + 1)]), empty: 'The first test is after 100 rounds.'});
+}
+$('mpause').onclick = async () => { await post(math && math.paused ? '/api/math/resume' : '/api/math/pause'); loadMath(); };
+$('mreset').onclick = async () => { if (confirm('Start over with a brand-new math AI that knows nothing? Everything it learned will be erased.')) { await post('/api/math/reset'); loadMath(); } };
+$('qgo').onclick = async () => {
+  const a = +$('qa').value, b = +$('qb').value, op = $('qop').value;
+  try {
+    const r = await post('/api/math/ask', {a, b, op});
+    const toks = ('00' + a).slice(-3).split('').concat([op === '+' ? '+' : '−']).concat(('00' + b).slice(-3).split('')).concat(['=']);
+    const att = r.attention[r.attention.length - 1];      // the last layer: which question digits it looked at
+    const rows = ['ones', 'tens', 'hundreds', 'thousands'];
+    $('qout').innerHTML = `<div style="font-size:22px;font-weight:800;margin:6px 0">${a} ${op === '+' ? '+' : '−'} ${b} = ${r.answer == null ? '?' : r.answer} <span class="${r.answer === r.truth ? 'ok' : 'no'}">${r.answer === r.truth ? '✅' : '❌ (it\'s ' + r.truth + ')'}</span></div>
+      <div class="muted">Where it "looked" while writing each digit of the answer (its attention):</div>
+      <table class="heat"><tr><th></th>${toks.map(t => `<th>${t}</th>`).join('')}</tr>` +
+      att.map((row, i) => `<tr><th style="width:auto;padding-right:6px;text-align:right">${rows[i]}</th>${row.map(v => `<td style="background:rgba(57,135,229,${Math.min(1, v * 2.2).toFixed(2)})"></td>`).join('')}</tr>`).join('') + '</table>' +
+      '<div class="muted" style="font-size:12px;margin-top:6px">Brighter = looked more. A good math AI looks at the matching digits (ones at the ones), like you do!</div>';
+  } catch (e) { $('qout').textContent = '❌ ' + e.message; }
+};
+
+// ---------------------------------------------------------------- part 2
+let bot = null;
+async function loadBot() {
+  try { bot = await api('/api/chatbot'); } catch (e) { return; }
+  const b = bot, pct = a => a[1] ? Math.round(100 * a[0] / a[1]) + '%' : '-';
+  $('bconn').textContent = b.running ? (b.connection[0] ? '● Practicing with ' + b.connection[1] : '⚠️ ' + b.connection[1]) : (b.connection[0] ? 'Ready: ' + b.connection[1] : 'Stopped');
+  $('bconn').className = 'pill' + (!b.running ? ' off' : b.connection[0] ? '' : ' warn');
+  $('bstart').textContent = b.running ? '⏸️ Stop practicing' : '▶ Start practicing';
+  $('bwith').textContent = pct(b.with); $('bwithn').textContent = b.with[1] ? `${b.with[0]} of ${b.with[1]} right` : '';
+  $('bwithout').textContent = pct(b.without); $('bwithoutn').textContent = b.without[1] ? `${b.without[0]} of ${b.without[1]} right` : '';
+  $('brounds').textContent = b.rounds.toLocaleString(); $('bbad').textContent = b.bad_questions.toLocaleString();
+  const n = Math.min(b.with[1], b.without[1]);
+  $('bverdict').textContent = n < 30 ? 'It needs at least 30 rounds of each kind before the comparison means much. Keep it practicing!' :
+    (b.with[0] / b.with[1] > b.without[0] / b.without[1] + 0.05 ? '📒 So far, the notebook seems to help.' : b.without[0] / b.without[1] > b.with[0] / b.with[1] + 0.05 ? 'So far, the notebook seems to make it worse! (That happens: long prompts can confuse a small model.)' : 'So far, there\'s no clear difference. Science is like that!');
+  if (document.activeElement !== $('bmodel')) $('bmodel').value = b.model;
+  $('bfeed').innerHTML = b.feed.map(f => f.kind === 'bad'
+    ? `<div class="qa"><div class="m">🗑️ Threw away a bad question about ${esc(f.topic)} (${esc(f.why)})</div></div>`
+    : `<div class="qa"><div class="p">${f.notebook ? '📒 ' : ''}${esc(f.problem)}</div><div class="m">Checker: ${esc(f.math)} = <b>${f.truth}</b> · AI answered <b>${f.answer == null ? '?' : f.answer}</b> <span class="${f.ok ? 'ok' : 'no'}">${f.ok ? '✅' : '❌'}</span> · ${f.seconds} s</div></div>`).join('')
+    || '<p class="muted">Press ▶ Start practicing. You need a language model running first: see the guide.</p>';
+  lineChart($('bchart'), [
+    {name: 'With the notebook', color: '#3987e5', points: b.history.filter(h => h[1][1]).map(h => [h[0], 100 * h[1][0] / h[1][1]])},
+    {name: 'Without the notebook', color: '#d95926', points: b.history.filter(h => h[2][1]).map(h => [h[0], 100 * h[2][0] / h[2][1]])}],
+    {yMax: 100, yTick: 25, ySuffix: '%', xName: 'Round', label: 'Accuracy with and without the notebook', empty: 'The chart starts after a few practice rounds.'});
+  $('bnote').innerHTML = b.notebook.length ? '<table class="t"><tr><th>Problem</th><th>Correct math</th><th>Answer</th></tr>' +
+    b.notebook.map(e => `<tr><td>${esc(e.problem)}</td><td><code>${esc(e.math)}</code></td><td><b>${e.answer}</b></td></tr>`).join('') + `</table><p class="muted">${b.notebook_size} pages in total.</p>` : '<p class="muted">Empty so far.</p>';
+}
+$('bstart').onclick = async () => { await post(bot && bot.running ? '/api/chatbot/stop' : '/api/chatbot/start'); loadBot(); };
+$('breset').onclick = async () => { if (confirm('Clear the notebook and all the scores?')) { await post('/api/chatbot/reset'); loadBot(); } };
+$('bsave').onclick = async () => { await post('/api/chatbot/settings', {model: $('bmodel').value.trim()}); loadBot(); };
+
+// ---------------------------------------------------------------- part 3
+let col = null;
+async function loadCol() {
+  try { col = await api('/api/collapse'); } catch (e) { return; }
+  const c = col, run = c.runs[0];
+  $('cstart').disabled = c.running;
+  $('cprog').style.width = run ? Math.round(run.progress * 100) + '%' : '0%';
+  $('cstatus').textContent = !run ? 'Each round takes a few minutes on a Pi. You can close the page; it keeps going.' :
+    run.status === 'running' ? `Running: round ${Math.min(run.settings.rounds, run.results.length + 1)} of ${run.settings.rounds}… (${Math.round(run.progress * 100)}%)` :
+    run.status === 'done' ? `Finished ${run.settings.rounds} rounds (${run.settings.keep_real ? 'with the real facts kept' : 'only its own writing'}).` : 'Stopped.';
+  $('crounds-out').innerHTML = run ? run.results.slice().reverse().map(r => `<div class="round"><h3>Round ${r.round} <span class="muted">· learned from ${esc(r.learned_from)}</span></h3>
+    <div class="muted">Different words: <b style="color:var(--text)">${r.different_words}</b> · different sentences: <b style="color:var(--text)">${r.different_sentences}%</b> · real words: <b style="color:var(--text)">${r.real_words}%</b> · surprise at the real facts: <b style="color:var(--text)">${r.surprise}</b></div>
+    <ul>${r.samples.slice(0, 6).map(s => `<li>${esc(s)}</li>`).join('')}</ul></div>`).join('') : '';
+  const runs = c.runs.filter(r => r.results.length).slice(0, 3), colors = ['#3987e5', '#d95926', '#94a3b8'];
+  const name = r => (r.settings.keep_real ? 'With real facts' : 'Only its own writing') + ' (' + new Date(r.started * 1000).toLocaleTimeString([], {hour: 'numeric', minute: '2-digit'}) + ')';
+  $('clegend').innerHTML = runs.map((r, i) => `<span><i style="background:${colors[i]}"></i>${esc(name(r))}</span>`).join('');
+  lineChart($('cchart1'), runs.map((r, i) => ({name: name(r), color: colors[i], points: r.results.map(x => [x.round, x.different_words])})), {xName: 'Round', xMin: 0, xTicks: 5, label: 'Different words per round', empty: 'Start an experiment to see the chart.'});
+  lineChart($('cchart2'), runs.map((r, i) => ({name: name(r), color: colors[i], points: r.results.map(x => [x.round, x.surprise])})), {xName: 'Round', xMin: 0, xTicks: 5, digits: 2, label: 'Surprise at the real facts per round', empty: 'Start an experiment to see the chart.'});
+}
+$('cstart').onclick = async () => {
+  try { await post('/api/collapse/start', {rounds: +$('crounds').value, temperature: +$('ctemp').value, keep_real: $('ckeep').checked}); loadCol(); }
+  catch (e) { $('cstatus').textContent = '❌ ' + e.message; }
+};
+$('cstop').onclick = async () => { await post('/api/collapse/stop'); loadCol(); };
+
+// ---------------------------------------------------------------- start
+function refresh() { ({math: loadMath, bot: loadBot, col: loadCol})[tab](); }
+setTab(tab);
+setInterval(() => { if (tab === 'math') loadMath(); }, 1500);
+setInterval(() => { if (tab === 'bot') loadBot(); }, 3000);
+setInterval(() => { if (tab === 'col') loadCol(); }, 3000);
+window.addEventListener('resize', refresh);
+</script>
+</body>
+</html>

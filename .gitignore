@@ -1,0 +1,6 @@
+# Made on your Pi. Never uploaded to GitHub.
+data/
+config.json
+__pycache__/
+*.pyc
+*.tmp

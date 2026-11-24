@@ -1,0 +1,3 @@
+# Only one package: numpy. On a Raspberry Pi, the easiest way to install it is:
+#   sudo apt install -y python3-numpy
+numpy

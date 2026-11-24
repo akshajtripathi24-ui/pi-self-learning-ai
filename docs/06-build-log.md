@@ -1,0 +1,40 @@
+# 6. Build log: problems we hit
+
+Every problem that came up while building Pi Self-Learning AI, what caused it, and how it was fixed.
+
+## Part 1: Building it
+
+### 1. The gradient check failed everywhere
+**Problem:** Writing an AI's learning code by hand is easy to get wrong, so we tested it with a *gradient check*. We nudged each of the AI's numbers a tiny bit and measured how the loss changed, then compared that with what the backpropagation code said. **Every single number disagreed**, even for the very last layer, which is the simplest part.
+**Cause:** The loss used `log(probability + 0.000000001)`, a common trick to avoid `log(0)`. The test used big weights, so some probabilities were far smaller than 0.000000001, and the added bit took over.
+**Fix:** The loss now uses **log-softmax**, the exact and stable way to work out log-probabilities. After the fix, backpropagation and the nudge test agreed to within 0.0000002.
+**Lesson:** Test your math code with a method you trust, like the nudge test, before trusting the AI's results.
+
+### 2. "Subtracting, 2 borrows: 0%"
+**Problem:** On level 5 (subtracting 2-digit numbers), the "weak spots" chart showed 0% for "2 borrows" and "3 borrows". Worse, the AI kept trying to write those questions, because 0% looked like a weak spot.
+**Cause:** Those questions can't happen! With 2-digit numbers (and the first number bigger), you can only borrow once.
+**Fix:** For each level, it now tries 4,000 random questions to find out which kinds of question are actually possible, and only tracks those.
+
+### 3. It forgot how to add while learning to subtract
+**Problem:** On level 5, it answered "47 + 38 = 84". It used to get that right.
+**Cause:** Only 10% of its questions reviewed earlier levels. Practicing one thing all the time can make an AI forget others. Scientists call it *catastrophic forgetting*.
+**Fix:** A fifth of its questions now review earlier levels.
+
+### 4. Asking a question while it trains could scramble its memory
+**Problem:** Found by reading the code. Your question on the web page and the training loop both use the AI's brain. Answering your question saves some numbers the training was in the middle of using.
+**Fix:** A lock makes them take turns. It's only a few milliseconds each.
+
+### 5. The collapse experiment would slow down the math AI
+**Problem:** Python can only really do one calculation at a time per program. Running the collapse experiment in the same program as the math AI would make both slower.
+**Fix:** The experiment runs as a separate program (a *process*), on its own processor core.
+
+### 6. The chatbot couldn't be tested with a real AI model here
+**Problem:** The computer used to build this can't download AI models (its network blocks those sites).
+**Fix:** We built a **pretend** Ollama server and a pretend llama.cpp server that answer like the real ones. The whole loop was tested with both: teacher, checker, student, notebook, and throwing away a bad question. The real thing gets tested on the Pi.
+
+### 7. The Pi's numpy is about twice as slow
+**Problem:** Raspberry Pi OS Bullseye comes with Python 3.9 and numpy 1.19, which are older than the computer this was built on.
+**Fix:** Everything was tested on exactly Python 3.9 and numpy 1.19.5. It all works. Training is about twice as slow (65 ms per round instead of 34 ms), and a Pi is slower again, so the math AI takes roughly 45–60 minutes to learn all 7 levels, not 4.
+
+## Part 2: Running it on the real Pi
+*Problems from installing and running it on a real Raspberry Pi 4 will be added here.*
