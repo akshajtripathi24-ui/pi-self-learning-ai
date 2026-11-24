@@ -41,10 +41,10 @@ Every problem that came up while building Pi Self-Learning AI, what caused it, a
 **Cause:** Raspberry Pi OS often runs a **64-bit kernel** (the core of the system) with **32-bit programs**. Ollama only comes as a 64-bit program, so it can't run there.
 **Fix:** Use llama.cpp, built from source as a 32-bit program. The guide now says to check with `getconf LONG_BIT`, not `uname -m`.
 
-### 9. The llama.cpp script would have failed twice
-**Problem:** Before you ran it, the script was tested by compiling llama.cpp for a 32-bit Pi on the build computer (this is called *cross-compiling*). That found two problems:
-1. The script turned off an option called `LLAMA_CURL`, but newer llama.cpp doesn't have it any more. It now has `LLAMA_OPENSSL` instead.
-2. On a Pi with a 64-bit kernel, llama.cpp's build sees `aarch64` and picks 64-bit settings, which the Pi's 32-bit compiler can't use.
+### 9. The llama.cpp script was out of date, and probably would have failed
+**Problem:** Before you ran it, the script was tested by compiling llama.cpp for a 32-bit Pi on the build computer (this is called *cross-compiling*), and by reading llama.cpp's build files. That turned up two things:
+1. The script turned off an option called `LLAMA_CURL`, but newer llama.cpp doesn't have it any more (it's now `LLAMA_OPENSSL`). That would only have caused a warning, but it showed the script was out of date.
+2. llama.cpp's build decides what kind of processor it's building for by asking the system, and on a Pi with a 64-bit kernel the answer is `aarch64`. So it would most likely pick 64-bit settings, which the Pi's 32-bit compiler can't use.
 
 **Fix:** The script now tells the build exactly what it's making: a 32-bit ARM program (`armv7l`), with the Pi 4's NEON math instructions turned on. It also downloads the exact llama.cpp version that was tested. That build was checked with the same compiler version as the Pi (GCC 10), and the finished program started correctly in an ARM emulator.
 
