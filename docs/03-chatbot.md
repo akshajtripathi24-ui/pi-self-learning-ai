@@ -17,6 +17,7 @@ First, find out which kind of Raspberry Pi OS you have:
 ```bash
 getconf LONG_BIT
 ```
+Use this, not `uname -m`! Many Pi 4s run a **64-bit kernel** (the core of the system, so `uname -m` says `aarch64`) with **32-bit programs** (so `getconf LONG_BIT` says `32`). What matters for installing programs is the programs: the `getconf` answer.
 
 ### If it says 64: use Ollama (about 15 minutes)
 ```bash
@@ -28,12 +29,24 @@ The first command installs [Ollama](https://ollama.com) (it runs AI models), and
 ollama run qwen2.5:0.5b "Say hi in five words."
 ```
 
-### If it says 32: use llama.cpp (30–60 minutes)
-Ollama only works on 64-bit Pi OS, so on 32-bit we build [llama.cpp](https://github.com/ggml-org/llama.cpp) instead. One script does it all: it builds llama.cpp (the slow part), downloads the model (about 490 MB) and runs it in the background on port 8099:
+### If it says 32: use llama.cpp (45–90 minutes)
+Ollama only has 64-bit programs, so on 32-bit Pi OS we build [llama.cpp](https://github.com/ggml-org/llama.cpp) instead. One script does it all: it builds llama.cpp as a 32-bit program (the slow part), downloads the model (about 490 MB) and runs it in the background on port 8099.
+
+Pause the Docking AI first, so the build gets all the memory and processor:
+```bash
+sudo systemctl stop dockingai
+```
 ```bash
 cd ~/selflearning && bash setup-llamacpp.sh
 ```
-Test it with `curl http://127.0.0.1:8099/health`. It should say `ok`. *This way hasn't been tested on a real 32-bit Pi yet. If it gives an error, send it, and it'll go in the build log.*
+When it says `Done!`, test it (it should say `ok`), then start the Docking AI again:
+```bash
+curl http://127.0.0.1:8099/health
+```
+```bash
+sudo systemctl start dockingai
+```
+*The build was tested for exactly this kind of Pi: 32-bit ARM, the Pi's GCC 10 compiler, and running in an ARM emulator. It hasn't run on a real Pi yet, so if anything gives an error, send it, and it'll go in the build log.*
 
 ### Then
 Open the **💬 Chatbot** tab and press **▶ Start practicing**. The badge should say **● Practicing with …**.

@@ -36,5 +36,21 @@ Every problem that came up while building Pi Self-Learning AI, what caused it, a
 **Problem:** Raspberry Pi OS Bullseye comes with Python 3.9 and numpy 1.19, which are older than the computer this was built on.
 **Fix:** Everything was tested on exactly Python 3.9 and numpy 1.19.5. It all works. Training is about twice as slow (65 ms per round instead of 34 ms), and a Pi is slower again, so the math AI takes roughly 45–60 minutes to learn all 7 levels, not 4.
 
+### 8. The Pi is half 64-bit and half 32-bit
+**Problem:** The Pi said `aarch64` for `uname -m` (64-bit) but `32` for `getconf LONG_BIT`.
+**Cause:** Raspberry Pi OS often runs a **64-bit kernel** (the core of the system) with **32-bit programs**. Ollama only comes as a 64-bit program, so it can't run there.
+**Fix:** Use llama.cpp, built from source as a 32-bit program. The guide now says to check with `getconf LONG_BIT`, not `uname -m`.
+
+### 9. The llama.cpp script would have failed twice
+**Problem:** Before you ran it, the script was tested by compiling llama.cpp for a 32-bit Pi on the build computer (this is called *cross-compiling*). That found two problems:
+1. The script turned off an option called `LLAMA_CURL`, but newer llama.cpp doesn't have it any more. It now has `LLAMA_OPENSSL` instead.
+2. On a Pi with a 64-bit kernel, llama.cpp's build sees `aarch64` and picks 64-bit settings, which the Pi's 32-bit compiler can't use.
+
+**Fix:** The script now tells the build exactly what it's making: a 32-bit ARM program (`armv7l`), with the Pi 4's NEON math instructions turned on. It also downloads the exact llama.cpp version that was tested. That build was checked with the same compiler version as the Pi (GCC 10), and the finished program started correctly in an ARM emulator.
+
+### 10. Building could run out of memory
+**Problem:** Building with 4 files at a time uses a lot of memory, and the Pi has 3.7 GB with almost no swap (99 MB), while also running the Docking AI.
+**Fix:** The script builds 2 files at a time, and the guide says to pause the Docking AI during the build.
+
 ## Part 2: Running it on the real Pi
 *Problems from installing and running it on a real Raspberry Pi 4 will be added here.*

@@ -17,6 +17,9 @@ sudo systemctl restart selflearning       # restart it (the math AI keeps what i
 | Speed says **🌡️ Cooling down** | The Pi got hotter than 78 °C, so the math AI is resting until it's under 70 °C. A fan or heatsink helps. Check with `vcgencmd measure_temp`. |
 | Chatbot: **No language model found** | Ollama (64-bit) or the llama.cpp server (32-bit) isn't running. See [3. The chatbot](03-chatbot.md). Check with `curl http://127.0.0.1:11434/api/tags` (Ollama) or `curl http://127.0.0.1:8099/health` (llama.cpp). |
 | Chatbot: **the model … isn't downloaded** | Run `ollama pull qwen2.5:0.5b`. |
+| `setup-llamacpp.sh` stops with `Killed` or `c++: fatal error: Killed signal terminated program` | The Pi ran out of memory while building. Stop the other projects (`sudo systemctl stop dockingai selflearning`), run the script again, then start them again. |
+| `setup-llamacpp.sh` stops during `wget` | The download was cut off. Run the script again: it skips the build (already done) and continues the download. |
+| Ollama says `cannot execute binary file` or `No such file or directory` | Your Pi OS is 32-bit (`getconf LONG_BIT` says 32). Use llama.cpp instead. See [3. The chatbot](03-chatbot.md). |
 | Chatbot: lots of **bad questions thrown away** | Normal for a small model: it often forgets the format. They're skipped, and only good questions count. |
 | The whole Pi is slow | Pause the Docking AI and the math AI while the chatbot practices, or stop the collapse experiment. |
 | The collapse experiment says **Stopped** after a restart | Restarting stops a running experiment. Start it again. |
