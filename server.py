@@ -149,7 +149,8 @@ class Lab:
             st = b.state
             return {"running": b.running, "connection": list(b.connection), "rounds": st["rounds"], "bad_questions": st["bad_questions"],
                     "with": st["with"], "without": st["without"], "history": st["history"][-300:], "feed": list(b.feed)[:15],
-                    "notebook": st["notebook"][-8:][::-1], "notebook_size": len(st["notebook"]), "model": self.cfg["model"]}
+                    "notebook": st["notebook"][-8:][::-1], "notebook_size": len(st["notebook"]), "model": self.cfg["model"],
+                    "stage": b.stage, "stage_seconds": round(time.time() - b.stage_since) if b.stage else None, "speed": b.llm.speed}
 
 
 class Handler(BaseHTTPRequestHandler):

@@ -29,7 +29,7 @@ The first command installs [Ollama](https://ollama.com) (it runs AI models), and
 ollama run qwen2.5:0.5b "Say hi in five words."
 ```
 
-### If it says 32: use llama.cpp (45–90 minutes)
+### If it says 32: use llama.cpp (about 30 minutes)
 Ollama only has 64-bit programs, so on 32-bit Pi OS we build [llama.cpp](https://github.com/ggml-org/llama.cpp) instead. One script does it all: it builds llama.cpp as a 32-bit program (the slow part), downloads the model (about 490 MB) and runs it in the background on port 8099.
 
 Pause the Docking AI first, so the build gets all the memory and processor:
@@ -50,6 +50,8 @@ sudo systemctl start dockingai
 
 ### Then
 Open the **💬 Chatbot** tab and press **▶ Start practicing**. The badge should say **● Practicing with …**.
+
+The first round takes a while, so watch the line under the buttons. It shows what the AI is doing right now (✍️ the teacher writing a question, or 🤔 the student answering), how many seconds so far, and its **speed in tokens a second**. A *token* is a piece of a word: language models read and write in tokens, not letters or whole words.
 
 ## Good to know
 - **It's slow:** each round takes about 15–60 seconds on a Pi 4. Let it run for an hour or more to get enough rounds for a fair comparison (at least 30 with and 30 without the notebook).

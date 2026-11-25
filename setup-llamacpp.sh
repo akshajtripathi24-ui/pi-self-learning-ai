@@ -1,7 +1,7 @@
 #!/bin/bash
 # For 32-bit Raspberry Pi OS (where Ollama can't run): builds llama.cpp, downloads a small chat model,
 # and runs it in the background on port 8099 for the chatbot.
-# Takes 45-90 minutes on a Pi 4, almost all of it building. Tip: pause the Docking AI first
+# Takes about 30 minutes on a Pi 4 (it took 30 on ours), almost all of it building. Tip: pause the Docking AI first
 # (sudo systemctl stop dockingai), so the build has all the memory and processor it needs.
 set -e
 LLAMA_VERSION=5fddd0b99888a90260736e0f734fa8e160064e03      # the exact version that was tested
@@ -21,7 +21,7 @@ if [ ! -x "$HOME/llama.cpp/build/bin/llama-server" ]; then
   cmake -B build -DCMAKE_SYSTEM_NAME=Linux -DCMAKE_SYSTEM_PROCESSOR=armv7l -DGGML_NATIVE=OFF \
         -DLLAMA_OPENSSL=OFF -DLLAMA_USE_PREBUILT_UI=OFF -DLLAMA_BUILD_TESTS=OFF -DLLAMA_BUILD_EXAMPLES=OFF \
         -DCMAKE_C_FLAGS="$FLAGS" -DCMAKE_CXX_FLAGS="$FLAGS" -DCMAKE_BUILD_TYPE=Release
-  echo "Building llama.cpp. This is the slow part (45-90 minutes)..."
+  echo "Building llama.cpp. This is the slow part (about 30 minutes)..."
   cmake --build build --target llama-server -j2      # 2 at a time, so it doesn't run out of memory
 fi
 "$HOME/llama.cpp/build/bin/llama-server" --version

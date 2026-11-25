@@ -99,6 +99,7 @@ class LLM:
     """Talks to the language model. Ollama (port 11434) or a llama.cpp server (port 8099)."""
     def __init__(self, cfg):
         self.cfg = cfg
+        self.speed = None          # how fast it writes, in tokens per second (a token is a piece of a word)
 
     def _post(self, url, body, timeout=300):
         req = urllib.request.Request(url, data=json.dumps(body).encode(), headers={"Content-Type": "application/json"})
@@ -129,9 +130,13 @@ class LLM:
             r = self._post(self.cfg["ollama_url"].rstrip("/") + "/api/generate",
                            {"model": self.cfg["model"], "prompt": prompt, "stream": False,
                             "options": {"temperature": temperature, "num_predict": max_tokens}})
+            if r.get("eval_count") and r.get("eval_duration"):
+                self.speed = round(r["eval_count"] / (r["eval_duration"] / 1e9), 1)
             return r.get("response", "")
         r = self._post(self.cfg["llamacpp_url"].rstrip("/") + "/v1/chat/completions",       # (uses the model's chat format)
                        {"messages": [{"role": "user", "content": prompt}], "max_tokens": max_tokens, "temperature": temperature})
+        if r.get("timings", {}).get("predicted_per_second"):
+            self.speed = round(r["timings"]["predicted_per_second"], 1)
         return r["choices"][0]["message"]["content"]
 
 
@@ -144,6 +149,7 @@ class Chatbot:
         self.running = False
         self.connection = (False, "Not checked yet")
         self.feed = deque(maxlen=30)
+        self.stage, self.stage_since = None, 0      # what it's doing right now, for the web page
         self.rng = random.Random()
         try:
             with open(self.file) as f:
@@ -167,6 +173,7 @@ class Chatbot:
         st = self.state
         topic = self.rng.choice(TOPICS)
         t0 = time.time()
+        self.stage, self.stage_since = "teacher", time.time()
         teacher = self.llm.ask(TEACHER_PROMPT.format(topic=topic), max_tokens=150, temperature=0.9)       # 1. teacher
         try:
             problem, math, truth = parse_teacher(teacher)                                                 # 2. checker
@@ -180,6 +187,7 @@ class Chatbot:
         if use_notebook:
             examples = "Here are some solved examples from your notebook:\n\n" + "\n\n".join(
                 "PROBLEM: %s\nMATH: %s\nANSWER: %s" % (e["problem"], e["math"], e["answer"]) for e in similar(problem, st["notebook"])) + "\n\n"
+        self.stage, self.stage_since = "student", time.time()
         reply = self.llm.ask(STUDENT_PROMPT.format(examples=examples, problem=problem), max_tokens=180, temperature=0.2)   # 3. student
         answer = parse_answer(reply)
         ok = answer is not None and abs(answer - truth) < 1e-9
@@ -211,5 +219,12 @@ class Chatbot:
             try:
                 self.practice_round()
             except Exception as e:
-                self.connection = (False, "Error talking to the model: %s" % e)
+                self.stage = None
+                why = "the model took more than 5 minutes to answer. Is the Pi busy with something else, like the Docking AI?" \
+                    if "timed out" in str(e) else str(e)
+                with self.lock:                     # (it goes in the feed, so it stays on the page)
+                    self.feed.appendleft({"kind": "error", "why": why})
+                self.connection = (False, "Error talking to the model: %s" % why)
                 time.sleep(10)
+            finally:
+                self.stage = None

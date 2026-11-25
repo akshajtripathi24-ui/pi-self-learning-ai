@@ -53,4 +53,14 @@ Every problem that came up while building Pi Self-Learning AI, what caused it, a
 **Fix:** The script builds 2 files at a time, and the guide says to pause the Docking AI during the build.
 
 ## Part 2: Running it on the real Pi
-*Problems from installing and running it on a real Raspberry Pi 4 will be added here.*
+What happened when it was installed on a real Raspberry Pi 4 (32-bit Pi OS, with a 64-bit kernel).
+
+### 11. Building llama.cpp on the real Pi worked the first time
+**What happened:** The tested build settings from problem 9 worked on the real Pi with no errors. It took **about 30 minutes**, faster than the 45–90 minutes we'd guessed, and the Pi stayed cool (about 40 °C at the start) thanks to a small fan. The Docking AI was paused during the build, as the guide says.
+**Fix:** The guide and the script now say about 30 minutes.
+**Lesson:** Testing the build on another computer first (cross-compiling plus an ARM emulator) meant the real install just worked.
+
+### 12. The chatbot looked like it wasn't doing anything
+**Problem:** After pressing **▶ Start practicing**, the badge said "Practicing with llama.cpp server", but there were 0 rounds, and the feed said "Press ▶ Start practicing", the same message as when it's stopped. It looked stuck, but it was working. A little later, the first question showed up.
+**Cause:** A round has two slow steps: the teacher writes a question, then the student answers it. The page only showed something once a whole round was finished. Also, if talking to the model failed, the error only showed on the badge for about 10 seconds before it was replaced.
+**Fix:** A new line under the buttons shows what it's doing right now (✍️ teacher writing, or 🤔 student answering), how many seconds so far, and its speed in tokens a second. Before the first round finishes, it says it's working on the first question. Errors now go into the feed, so they stay on the page. Tested with a pretend llama.cpp server that answers slowly, and one that never answers.

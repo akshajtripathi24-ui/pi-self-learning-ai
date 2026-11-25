@@ -122,6 +122,7 @@ footer{text-align:center;color:var(--muted);font-size:12px;padding:20px}footer a
     <p class="muted" style="margin-top:0">A small ready-made AI language model, running on the Pi. It writes its own word problem (teacher), Python checks the math (checker), then it answers without seeing the math (student). Wrong answers go into its notebook. <b>Half</b> the time it reads similar notebook pages first, so we can see if the notebook really helps.</p>
     <div class="bar"><span class="pill off" id="bconn">Not running</span></div>
     <div class="bar"><button id="bstart">▶ Start practicing</button><button class="ghost small" id="breset">⚠️ Clear the notebook and scores</button></div>
+    <p class="muted" id="bstage" style="margin:8px 0 0"></p>
     <div id="bfeed" style="margin-top:8px"></div>
   </section>
   <section class="card">
@@ -284,10 +285,14 @@ async function loadBot() {
   $('bverdict').textContent = n < 30 ? 'It needs at least 30 rounds of each kind before the comparison means much. Keep it practicing!' :
     (b.with[0] / b.with[1] > b.without[0] / b.without[1] + 0.05 ? '📒 So far, the notebook seems to help.' : b.without[0] / b.without[1] > b.with[0] / b.with[1] + 0.05 ? 'So far, the notebook seems to make it worse! (That happens: long prompts can confuse a small model.)' : 'So far, there\'s no clear difference. Science is like that!');
   if (document.activeElement !== $('bmodel')) $('bmodel').value = b.model;
+  const speed = b.speed ? ` · Speed: ${b.speed} tokens a second (a token is a piece of a word)` : '';
+  $('bstage').textContent = b.running && b.stage ? (b.stage === 'teacher' ? '✍️ The teacher is writing a new question… ' : '🤔 The student is answering… ') + b.stage_seconds + ' s so far' + speed : '';
   $('bfeed').innerHTML = b.feed.map(f => f.kind === 'bad'
     ? `<div class="qa"><div class="m">🗑️ Threw away a bad question about ${esc(f.topic)} (${esc(f.why)})</div></div>`
+    : f.kind === 'error' ? `<div class="qa"><div class="m">⚠️ Problem talking to the model: ${esc(f.why)}</div></div>`
     : `<div class="qa"><div class="p">${f.notebook ? '📒 ' : ''}${esc(f.problem)}</div><div class="m">Checker: ${esc(f.math)} = <b>${f.truth}</b> · AI answered <b>${f.answer == null ? '?' : f.answer}</b> <span class="${f.ok ? 'ok' : 'no'}">${f.ok ? '✅' : '❌'}</span> · ${f.seconds} s</div></div>`).join('')
-    || '<p class="muted">Press ▶ Start practicing. You need a language model running first: see the guide.</p>';
+    || (b.running ? '<p class="muted">Working on the first question. Each round takes about 15–60 seconds on a Pi, or longer while the Docking AI is running.</p>'
+                  : '<p class="muted">Press ▶ Start practicing. You need a language model running first: see the guide.</p>');
   lineChart($('bchart'), [
     {name: 'With the notebook', color: '#3987e5', points: b.history.filter(h => h[1][1]).map(h => [h[0], 100 * h[1][0] / h[1][1]])},
     {name: 'Without the notebook', color: '#d95926', points: b.history.filter(h => h[2][1]).map(h => [h[0], 100 * h[2][0] / h[2][1]])}],
