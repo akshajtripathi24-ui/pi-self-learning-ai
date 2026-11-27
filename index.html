@@ -293,8 +293,7 @@ async function loadBot() {
   $('bwithout').textContent = pct(b.without); $('bwithoutn').textContent = b.without[1] ? `${b.without[0]} of ${b.without[1]} right` : '';
   $('brounds').textContent = b.rounds.toLocaleString(); $('bbad').textContent = b.bad_questions.toLocaleString();
   $('bverdict').textContent = verdictText(b.result);
-  if (document.activeElement !== $('xpages')) $('xpages').value = b.settings.pages;
-  if (document.activeElement !== $('xstrict')) $('xstrict').checked = !!b.settings.strict;
+  if (!xdirty) { $('xpages').value = b.settings.pages; $('xstrict').checked = !!b.settings.strict; }   // don't undo what you just changed
   const runRow = (r, i, live) => `<tr${live ? ' style="font-weight:700"' : ''}><td>${live ? 'Now' : i + 1}</td><td>${esc(r.settings.model || '?')}</td><td>${r.settings.pages || 3}</td><td>${r.settings.strict ? 'on' : 'off'}</td>
     <td>${pct(r.with)} <span class="muted">(${r.with[0]}/${r.with[1]})</span></td><td>${pct(r.without)} <span class="muted">(${r.without[0]}/${r.without[1]})</span></td>
     <td>${r.bad_questions} of ${r.rounds + r.bad_questions}</td><td>${esc(r.result.verdict)}${r.result.luck != null ? ` <span class="muted">(${r.result.luck}% chance it's luck)</span>` : ''}</td></tr>`;
@@ -326,9 +325,13 @@ function verdictText(r) {
   if (r.verdict === 'the notebook made it worse') return 'The notebook makes it worse!' + luck + ' (Bad examples, or long prompts, can confuse a small model.)';
   return 'No clear difference so far.' + luck + ' Science is like that!';
 }
+let xdirty = false;            // you changed a setting: the page's refresh mustn't put it back
+$('xpages').onchange = $('xstrict').onchange = () => { xdirty = true; };
 $('xstart').onclick = async () => {
-  if (!confirm('Save this experiment and start a new one with an empty notebook?')) return;
-  await post('/api/chatbot/experiment', {pages: +$('xpages').value, strict: $('xstrict').checked}); loadBot();
+  const pages = +$('xpages').value, strict = $('xstrict').checked;
+  if (!confirm(`Save this experiment and start a new one with an empty notebook?\n\nNew settings: ${pages} notebook page${pages > 1 ? 's' : ''}, strict checker ${strict ? 'ON' : 'OFF'}`)) return;
+  await post('/api/chatbot/experiment', {pages, strict});
+  xdirty = false; loadBot();
 };
 $('bsave').onclick = async () => { await post('/api/chatbot/settings', {model: $('bmodel').value.trim()}); loadBot(); };
 
