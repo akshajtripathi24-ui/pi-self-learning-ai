@@ -478,7 +478,7 @@ async function loadChat() {
       if (a.memories && a.memories.length) notes += `<div class="fix">🔗 Remembered from: ${a.memories.map(x => `<a data-open="${esc(x.chat)}">${esc(x.title)}</a>`).join(', ')}</div>`;
       if (a.engine && a.engine.steps && a.engine.steps.length) notes += `<details class="steps"><summary>📝 Show the steps</summary><ol>${a.engine.steps.map(st => `<li>${esc(st)}</li>`).join('')}</ol></details>`;
       if (a.retried && !a.refused) notes += `<div class="fix">🔁 It first said it couldn't help, so it tried again with a simpler question</div>`;
-      if (a.refused) notes += `<div class="fix">🤔 This small AI said it can't help. If it's a normal question, try asking it a different way, or press 🔄 Try again.</div>`;
+      if (a.refused) notes += `<div class="fix">🤔 ${a.explained ? 'It said no without a reason, so it was asked why. You can press 🔄 Try again.' : 'This small AI said no. If it\'s a normal question, try asking it a different way, or press 🔄 Try again.'}</div>`;
       if (a.stopped) notes += `<div class="fix">⏹️ ${a.interrupted ? 'Cut off: the Pi restarted while it was writing' : 'Stopped'}</div>`;
       const last = mi === msgs.length - 1 && i === m.answers.length - 1;
       const acts = a.writing ? '' : `<div class="acts"><button class="act" data-say="${mi}:${i}">🔊 Read aloud</button>${last && !c.busy ? '<button class="act" data-regen="1">🔄 Try again</button>' : ''}</div>`;
@@ -503,7 +503,7 @@ async function loadChat() {
   const speed = c.speed ? ` · ${c.speed} tokens a second` : '';
   const here = !c.busy_chat || c.busy_chat === chatId;
   $('chatstage').textContent = !c.busy ? '' : !here ? '⏳ It\'s answering in another chat. Wait a moment…' :
-    (c.stage === 'fixing' ? '✏️ Fixing the spelling and grammar… ' : c.stage === 'answering' ? '🤔 Thinking… ' : c.stage === 'writing' ? '✍️ Writing… ' : c.stage === 'titling' ? '🏷️ Naming this chat… ' : '⏳ Getting ready… ') + (c.stage_seconds || 0) + ' s' + speed;
+    (c.stage === 'fixing' ? '✏️ Fixing the spelling and grammar… ' : c.stage === 'answering' ? '🤔 Thinking… ' : c.stage === 'writing' ? '✍️ Writing… ' : c.stage === 'explaining' ? '🤔 It said no, so it\'s working out why… ' : c.stage === 'titling' ? '🏷️ Naming this chat… ' : '⏳ Getting ready… ') + (c.stage_seconds || 0) + ' s' + speed;
   $('chatsend').disabled = c.busy;
   $('chatsend').classList.toggle('hide', c.busy && here);
   $('chatstop').classList.toggle('hide', !(c.busy && here));

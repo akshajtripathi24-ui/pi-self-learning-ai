@@ -34,7 +34,8 @@ Text: {text}
 Fixed:"""
 
 ANSWER_SYSTEM = """You are a friendly helper for a student who loves robotics, space and coding.
-Answer the question clearly in 2 to 4 short sentences. If you're not sure about something, say so."""
+Answer the question clearly in 2 to 4 short sentences. If you're not sure about something, say so.
+If you can't help with something, say why in one sentence, and suggest something related you can help with."""
 
 TITLE_PROMPT = """Write a short title (2 to 5 words) for a chat that starts with this question. Reply with only the title.
 
@@ -45,10 +46,35 @@ Question: {question}
 Title:"""
 
 RETRY_SYSTEM = """You are a helpful teacher for a high school student. Answer the question clearly and simply in 2 to 4 sentences.
-Only refuse if the question asks for something truly dangerous or harmful."""
+Only refuse if the question asks for something truly dangerous or harmful. If you do refuse, say why in one sentence,
+and suggest a safe, related question you can answer instead."""
+
+EXPLAIN_SYSTEM = """You are a friendly teacher for a high school student. An AI just refused to answer the student's question.
+Don't answer the question itself. In 2 short sentences: first say why an AI might not answer it (for example, it could be
+dangerous, it's about someone's private information, or it needs live information from the internet, which this AI
+doesn't have). Then suggest a safe, related question the student could ask instead. Start with "I can't help with that because"."""
+
+# words that show a refusal gives a reason ("...because it could hurt someone", "...I don't have internet access")
+REASON = re.compile(r"\b(because|since|as it|due to|could|might|would|dangerous|unsafe|harm|harmful|hurt|illegal|against|"
+                    r"private|personal|real-time|live|internet|online|access|don't have|do not have|not allowed|instead)\b", re.I)
+LIVE = re.compile(r"\b(today|tonight|tomorrow|yesterday|right now|current|currently|latest|live|news|weather|score|scores|price|prices|"
+                  r"stock|stocks|this week|this year)\b", re.I)
 
 REFUSAL = re.compile(r"(i('m| am) sorry,? but i (can('|no)t|won't|am not able|am unable)|i can('|no)t (assist|help|provide|answer|do that|comply)|"
                      r"i('m| am) (not able|unable) to (assist|help|answer|provide)|as an ai( language model)?,? i (can('|no)t|don't))", re.I)
+
+
+def has_reason(text):
+    return bool(REASON.search(text or ""))
+
+
+def fallback_reason(question):
+    """If even the explanation fails, the Pi gives a reason itself."""
+    if LIVE.search(question):
+        return ("I can't help with that because I can't look things up on the internet, so I don't know what's happening "
+                "right now. Try asking me how something works instead, like how weather forecasts are made.")
+    return ("I can't help with that one. Small AIs like me are trained to say no to anything that sounds like it could be "
+            "risky, and sometimes we're too careful with normal questions. If it's a normal question, try asking it a different way.")
 
 
 def is_refusal(text):
@@ -409,6 +435,7 @@ class Chat:
                 stopped = self._write(entry, convo, 0.85 if again else 0.4)
                 if not stopped and is_refusal(entry["a"]):
                     # small models sometimes refuse harmless questions: try once more, simply, without the extras
+                    first = entry["a"]
                     with self.lock:
                         entry["a"], entry["writing"], entry["retried"] = "", True, True
                     simple = [{"role": "system", "content": RETRY_SYSTEM + math_note}, {"role": "user", "content": q}]
@@ -416,6 +443,12 @@ class Chat:
                     if not stopped and is_refusal(entry["a"]):
                         with self.lock:
                             entry["refused"] = True
+                        if not has_reason(entry["a"]):           # a bare "I can't assist with that": find out why
+                            if has_reason(first):
+                                with self.lock:
+                                    entry["a"] = first
+                            else:
+                                stopped = self._explain(entry, q)
                 with self.lock:
                     chat["updated"] = time.time()
                     self._save(chat)
@@ -451,9 +484,21 @@ class Chat:
                     self._save(chat)
             self.bot.hold_until = time.time() + 20             # carry on practicing soon, unless you ask again
 
-    def _write(self, entry, convo, temperature):
+    def _explain(self, entry, q):
+        """It said no without saying why. Ask for the reason (and a safer question to ask instead).
+        If even that's a bare refusal, the Pi writes a reason itself. Returns True if you pressed Stop."""
+        with self.lock:
+            entry["a"], entry["writing"], entry["explained"] = "", True, True
+        stopped = self._write(entry, [{"role": "system", "content": EXPLAIN_SYSTEM},
+                                      {"role": "user", "content": "The student's question: " + q}], 0.5, stage="explaining")
+        if not stopped and (not has_reason(entry["a"]) or len(entry["a"]) < 25):
+            with self.lock:
+                entry["a"] = fallback_reason(q)
+        return stopped
+
+    def _write(self, entry, convo, temperature, stage="writing"):
         """Live typing: stream the answer into entry. Returns True if you pressed Stop."""
-        self._set("writing")
+        self._set(stage)
 
         def add(piece):
             with self.lock:

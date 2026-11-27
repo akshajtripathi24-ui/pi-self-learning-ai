@@ -267,3 +267,13 @@ A question that really is dangerous still gets refused: the retry doesn't change
 **Problem:** the safety check on the spelling fix (see #21) compared letters and words, but not numbers. So if the AI "fixed" `whats 2.5+1.75` into "What's 25 + 1.75?", the check let it through, and the math engine would have solved the wrong problem, exactly and confidently.
 **Fix:** a fix now has to keep every number and math symbol the same, in the same order (`2.5`, `+`, `1.75`). Commas in big numbers don't count, so "1,250" and "1250" match, and neither do hyphens in words like "well-known". If anything changed, it uses exactly what you typed.
 **Tested:** 12 pairs of typed and "fixed" questions: real fixes all passed, and changed numbers (2.5 → 25, 20 → 25), a changed sign (− → +) and a dropped % were all caught.
+
+### 35. "I can't help with that" with no reason
+**Problem:** even after the retry in #28, a refusal could still be a bare "I'm sorry, but I can't assist with that." That doesn't tell you anything: was the question dangerous, about someone's private information, or something the AI just can't know (like today's weather)?
+**Fix:** a refusal now always comes with a reason, in three steps:
+1. **It's asked for one up front:** the AI's instructions say "if you can't help, say why in one sentence, and suggest something related you can help with."
+2. **If it still gives a bare refusal,** it's asked one more short question: why might an AI not answer this, and what safe question could the student ask instead? Its explanation replaces the bare refusal. (It's told not to answer the question itself, so a dangerous question stays unanswered.)
+3. **If even that's a bare refusal,** the Pi writes a reason itself: if the question needs live information (words like "today", "weather", "news" or "price"), it says it can't look things up on the internet. Otherwise it explains that small AIs are trained to say no to anything that sounds risky, and are sometimes too careful.
+
+A refusal counts as having a reason if it says something like "because", "dangerous", "private" or "internet". A refusal that already gave a reason is kept as it is, without asking again. Normal answers never go through any of this, so they're no slower.
+**Tested:** with a pretend model: a dangerous question (it explained why), "what's the weather today" (the Pi's own internet reason), a question where even the explanation was refused (the Pi's general reason), a refusal that already had a reason (kept, nothing extra asked), and two normal questions (no extra steps). All 6 passed, plus the 14 chat tests and a check in the browser.
