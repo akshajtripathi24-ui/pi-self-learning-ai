@@ -74,8 +74,13 @@ What happened when it was installed on a real Raspberry Pi 4 (32-bit Pi OS, with
 ### 14. It slowed down to 0.9 tokens a second
 **Problem:** After the Pi was moved and restarted, the chatbot wrote just 0.9 tokens a second, so one question took more than a minute.
 **Cause (most likely):** When the Pi starts, every project starts by itself, including the Docking AI, even though it had been paused. The Docking AI uses 3 of the 4 processor cores, and llama.cpp slows down a lot when it has to share them.
-**Fix:** The chatbot page now warns you when the Pi is very busy and tells you the command to pause the Docking AI.
+**Fix:** The chatbot page now warns you when the Pi is very busy and tells you the command to pause the Docking AI. After pausing the Docking AI, the speed went from **0.9 to 4.9 tokens a second**, more than 5 times faster, and a round took 17 to 50 seconds.
 
 ### 15. Practice stopped when the Pi restarted
 **Problem:** After the Pi restarted, the math AI carried on by itself, but the chatbot didn't, and you had to press ▶ Start practicing again.
 **Fix:** The chatbot now remembers whether it was practicing, and starts again by itself after a restart. Tested by restarting the program in the middle of practice.
+
+### 16. The teacher got its own math wrong
+**Problem:** With the new checker, most thrown-away questions were real mistakes: "the answer isn't a whole number" (like 9 robots ÷ 2). One question was worse. The AI wrote "A space telescope sends a message every 5 seconds. How many messages will it send in 3 minutes?" with the math `5 * 3`, so the checker worked out 15. The right answer is 3 minutes = 180 seconds, and 180 ÷ 5 = **36**.
+**Cause:** The checker can only check that the math *adds up*. It can't check that the math *matches the words*. A small model can write a sensible question and then the wrong math for it.
+**Fix:** The teacher is now asked to choose numbers that give a whole-number answer, so fewer rounds are wasted. The wrong-math problem has no easy fix. It's a real AI research problem, and the guide already warns about it ("checking the checker"). When you spot one in the feed, it's a good example of why AI answers still need a person to check them.

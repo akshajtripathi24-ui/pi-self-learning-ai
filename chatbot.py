@@ -28,6 +28,7 @@ TOPICS = ["a Mars rover", "astronauts on the space station", "a rocket launch", 
           "fuel for a spacecraft", "space food", "a weather station", "an ISS pass", "a Raspberry Pi"]
 
 TEACHER_PROMPT = """Write one short math word problem for a 12-year-old about {topic}. Use small whole numbers.
+Choose the numbers so the answer is a whole number.
 Then write the math that solves it, using only numbers, + - * / and parentheses. Don't write the answer.
 Use exactly this format, like this example:
 PROBLEM: A robot picks 4 apples every minute. How many apples does it pick in 6 minutes?
