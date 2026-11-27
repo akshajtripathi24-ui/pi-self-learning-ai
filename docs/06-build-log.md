@@ -261,3 +261,8 @@ A question that really is dangerous still gets refused: the retry doesn't change
 - "I have 3 robots and 4 wheels each": it has to start like a question.
 
 **Tested:** 15 sentences, including all of those.
+
+### 34. The spelling fixer could change your math
+**Problem:** the safety check on the spelling fix (see #21) compared letters and words, but not numbers. So if the AI "fixed" `whats 2.5+1.75` into "What's 25 + 1.75?", the check let it through, and the math engine would have solved the wrong problem, exactly and confidently.
+**Fix:** a fix now has to keep every number and math symbol the same, in the same order (`2.5`, `+`, `1.75`). Commas in big numbers don't count, so "1,250" and "1250" match, and neither do hyphens in words like "well-known". If anything changed, it uses exactly what you typed.
+**Tested:** 12 pairs of typed and "fixed" questions: real fixes all passed, and changed numbers (2.5 → 25, 20 → 25), a changed sign (− → +) and a dropped % were all caught.

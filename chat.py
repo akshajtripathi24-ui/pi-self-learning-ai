@@ -90,11 +90,21 @@ def _is_question(sentence):
                            for q in QUESTION_WORDS)
 
 
+def math_bits(text):
+    """The numbers and math symbols in order: 'whats 2.5+1,250?' -> ['2.5', '+', '1250']. (A '-' only counts
+    between numbers or spaces, so the hyphen in "well-known" doesn't.)"""
+    text = re.sub(r"(?<=\d),(?=\d{3}\b)", "", text)
+    return re.findall(r"\d+(?:\.\d+)?|[+*/^=%]|(?<=[\d\s])-(?=[\s\d.(x])", text)
+
+
 def only_fixed(original, fixed):
     """The safety check: did the AI only fix the spelling and grammar? Small AIs sometimes answer the question
     instead ("...is Jupiter."), or add their own sentences. If so, we keep what you typed."""
     a, b = original.lower(), fixed.lower()
     if not 0.4 <= len(b) / max(1, len(a)) <= 2.5 or difflib.SequenceMatcher(None, a, b).ratio() < 0.5:
+        return False
+    # the math must stay exactly the same: "fixing" 2.5 into 25, or + into -, would solve the wrong problem
+    if math_bits(a) != math_bits(b):
         return False
     # it mustn't add sentences that aren't questions (that's usually an answer)
     statements = lambda t: sum(not _is_question(x) for x in _sentences(t))

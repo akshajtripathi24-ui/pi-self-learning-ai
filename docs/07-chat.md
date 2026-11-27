@@ -22,6 +22,7 @@ Like other chatbots, you can have lots of separate chats:
 1. **✏️ It fixes your message.** The AI rewrites it with the spelling and grammar fixed, and shows you what it understood: "I read this as: What is the biggest planet?"
 2. **🛡️ A safety check makes sure it *only* fixed it.** Small AIs sometimes answer the question instead of fixing it ("…is Jupiter."), or change it. The check refuses the fix if:
    - the letters changed too much,
+   - it changed any number or math symbol (like 2.5 into 25, or + into −), which would make the math engine solve the wrong problem,
    - it added a sentence that isn't a question (that's usually an answer), or
    - it brought in lots of new words.
    Then it just uses what you typed.
