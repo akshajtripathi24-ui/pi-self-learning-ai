@@ -31,7 +31,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 DATA = os.path.join(HERE, "data")
 RUNS = os.path.join(DATA, "collapse")
 SETTINGS_FILE = os.path.join(HERE, "config.json")
-DEFAULTS = {"math_paused": False, "model": "qwen2.5:0.5b", "ollama_url": "http://localhost:11434", "llamacpp_url": "http://localhost:8099"}
+DEFAULTS = {"math_paused": False, "chatbot_running": False, "model": "qwen2.5:0.5b", "ollama_url": "http://localhost:11434", "llamacpp_url": "http://localhost:8099"}
 
 
 def load_settings():
@@ -81,6 +81,7 @@ class Lab:
         self.math = selfmath.MathAI(DATA)
         self.math.paused = cfg["math_paused"]
         self.bot = Chatbot(DATA, cfg)
+        self.bot.running = cfg["chatbot_running"]           # keep practicing after the Pi restarts
         self.collapse_proc = None
         self.collapse_path = None
         for path in glob.glob(os.path.join(RUNS, "*.json")):          # runs that were cut off by a restart
@@ -150,7 +151,8 @@ class Lab:
             return {"running": b.running, "connection": list(b.connection), "rounds": st["rounds"], "bad_questions": st["bad_questions"],
                     "with": st["with"], "without": st["without"], "history": st["history"][-300:], "feed": list(b.feed)[:15],
                     "notebook": st["notebook"][-8:][::-1], "notebook_size": len(st["notebook"]), "model": self.cfg["model"],
-                    "stage": b.stage, "stage_seconds": round(time.time() - b.stage_since) if b.stage else None, "speed": b.llm.speed}
+                    "stage": b.stage, "stage_seconds": round(time.time() - b.stage_since) if b.stage else None, "speed": b.llm.speed,
+                    "load": round(os.getloadavg()[0], 1), "cores": os.cpu_count() or 4}
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -215,7 +217,8 @@ class Handler(BaseHTTPRequestHandler):
                 lab.stop_collapse()
                 return self._send(200, {"ok": True})
             if path in ("/api/chatbot/start", "/api/chatbot/stop"):
-                lab.bot.running = path.endswith("start")
+                lab.bot.running = lab.cfg["chatbot_running"] = path.endswith("start")
+                lab.save_settings()
                 if lab.bot.running:
                     lab.bot.connection = lab.bot.llm.check()
                 return self._send(200, lab.chatbot_status())

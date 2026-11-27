@@ -55,7 +55,9 @@ The first round takes a while, so watch the line under the buttons. It shows wha
 
 ## Good to know
 - **It's slow:** each round takes about 15–60 seconds on a Pi 4. Let it run for an hour or more to get enough rounds for a fair comparison (at least 30 with and 30 without the notebook).
-- **It uses all 4 processor cores.** Pause the Docking AI while the chatbot practices, and keep an eye on the Pi's temperature.
+- **It uses all 4 processor cores.** Pause the Docking AI while the chatbot practices (`sudo systemctl stop dockingai`), and keep an eye on the Pi's temperature. If the Pi is too busy, the chatbot page warns you. Remember that the Docking AI starts again by itself whenever the Pi restarts.
+- **It keeps practicing after a restart.** If the Pi loses power or restarts, the chatbot carries on by itself.
+- **Click a thrown-away question** (🗑️) to see exactly what the AI wrote, and why the checker refused it.
 - **The teacher can be wrong too!** Sometimes it writes a problem whose math doesn't match the words. Then the "correct" answer is wrong, and the student gets marked wrong unfairly. Look through the feed and see if you can spot one. That's a real problem in AI research: checking the checker.
 - The download needs internet, but after that it all runs on your Pi. Nothing is sent anywhere.
 

@@ -286,9 +286,10 @@ async function loadBot() {
     (b.with[0] / b.with[1] > b.without[0] / b.without[1] + 0.05 ? '📒 So far, the notebook seems to help.' : b.without[0] / b.without[1] > b.with[0] / b.with[1] + 0.05 ? 'So far, the notebook seems to make it worse! (That happens: long prompts can confuse a small model.)' : 'So far, there\'s no clear difference. Science is like that!');
   if (document.activeElement !== $('bmodel')) $('bmodel').value = b.model;
   const speed = b.speed ? ` · Speed: ${b.speed} tokens a second (a token is a piece of a word)` : '';
-  $('bstage').textContent = b.running && b.stage ? (b.stage === 'teacher' ? '✍️ The teacher is writing a new question… ' : '🤔 The student is answering… ') + b.stage_seconds + ' s so far' + speed : '';
+  const busy = b.running && b.load > b.cores + 1 ? `<br>⚠️ The Pi is very busy (load ${b.load} on ${b.cores} cores), so practice is slow. Is the Docking AI running? Pause it with: sudo systemctl stop dockingai` : '';
+  $('bstage').innerHTML = esc(b.running && b.stage ? (b.stage === 'teacher' ? '✍️ The teacher is writing a new question… ' : '🤔 The student is answering… ') + b.stage_seconds + ' s so far' + speed : '') + busy;
   $('bfeed').innerHTML = b.feed.map(f => f.kind === 'bad'
-    ? `<div class="qa"><div class="m">🗑️ Threw away a bad question about ${esc(f.topic)} (${esc(f.why)})</div></div>`
+    ? `<div class="qa"><details><summary class="m">🗑️ Threw away a bad question about ${esc(f.topic)} (${esc(f.why)}). Click to see what it wrote</summary><pre class="m" style="white-space:pre-wrap">${esc(f.text || '')}</pre></details></div>`
     : f.kind === 'error' ? `<div class="qa"><div class="m">⚠️ Problem talking to the model: ${esc(f.why)}</div></div>`
     : `<div class="qa"><div class="p">${f.notebook ? '📒 ' : ''}${esc(f.problem)}</div><div class="m">Checker: ${esc(f.math)} = <b>${f.truth}</b> · AI answered <b>${f.answer == null ? '?' : f.answer}</b> <span class="${f.ok ? 'ok' : 'no'}">${f.ok ? '✅' : '❌'}</span> · ${f.seconds} s</div></div>`).join('')
     || (b.running ? '<p class="muted">Working on the first question. Each round takes about 15–60 seconds on a Pi, or longer while the Docking AI is running.</p>'

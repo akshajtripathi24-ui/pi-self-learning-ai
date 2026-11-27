@@ -64,3 +64,18 @@ What happened when it was installed on a real Raspberry Pi 4 (32-bit Pi OS, with
 **Problem:** After pressing **▶ Start practicing**, the badge said "Practicing with llama.cpp server", but there were 0 rounds, and the feed said "Press ▶ Start practicing", the same message as when it's stopped. It looked stuck, but it was working. A little later, the first question showed up.
 **Cause:** A round has two slow steps: the teacher writes a question, then the student answers it. The page only showed something once a whole round was finished. Also, if talking to the model failed, the error only showed on the badge for about 10 seconds before it was replaced.
 **Fix:** A new line under the buttons shows what it's doing right now (✍️ teacher writing, or 🤔 student answering), how many seconds so far, and its speed in tokens a second. Before the first round finishes, it says it's working on the first question. Errors now go into the feed, so they stay on the page. Tested with a pretend llama.cpp server that answers slowly, and one that never answers.
+
+### 13. Three out of four questions were thrown away
+**Problem:** After the first night, the chatbot had done 15 practice rounds, but it had thrown away **51** of the questions it wrote, all as "not simple math".
+**Cause:** We tested the checker on the kinds of answers small AI models usually write, and it refused all six. The model often writes the answer as well (`MATH: 12 * 5 = 60`), adds units (`30 liters * 8 minutes`), or adds formatting like **bold** or `backticks`. The checker only accepted pure math. Two of them were even worse: a leftover `**` or a missing bracket caused a different kind of error, which made the program think the model's connection had broken, so it waited 10 seconds before trying again.
+**Fix:** The checker now keeps just the math part: everything before the `=`, without words, units or formatting. To stay safe, it refuses math with no + − × ÷ in it (so "5 squared" can't turn into just "5" and give a wrong answer). The teacher's instructions now include an example, and you can click a thrown-away question to see exactly what the AI wrote. Tested with 11 typical answers: real math gets through, and broken math, dividing by zero, answers that aren't whole numbers and anything that isn't math are still thrown away.
+**Lesson:** When an AI's answers go into another program, expect it to not follow the format exactly, and make the checker forgiving where it's safe.
+
+### 14. It slowed down to 0.9 tokens a second
+**Problem:** After the Pi was moved and restarted, the chatbot wrote just 0.9 tokens a second, so one question took more than a minute.
+**Cause (most likely):** When the Pi starts, every project starts by itself, including the Docking AI, even though it had been paused. The Docking AI uses 3 of the 4 processor cores, and llama.cpp slows down a lot when it has to share them.
+**Fix:** The chatbot page now warns you when the Pi is very busy and tells you the command to pause the Docking AI.
+
+### 15. Practice stopped when the Pi restarted
+**Problem:** After the Pi restarted, the math AI carried on by itself, but the chatbot didn't, and you had to press ▶ Start practicing again.
+**Fix:** The chatbot now remembers whether it was practicing, and starts again by itself after a restart. Tested by restarting the program in the middle of practice.

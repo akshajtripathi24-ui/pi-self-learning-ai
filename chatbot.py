@@ -28,8 +28,12 @@ TOPICS = ["a Mars rover", "astronauts on the space station", "a rocket launch", 
           "fuel for a spacecraft", "space food", "a weather station", "an ISS pass", "a Raspberry Pi"]
 
 TEACHER_PROMPT = """Write one short math word problem for a 12-year-old about {topic}. Use small whole numbers.
-Then write the math that solves it, using only numbers, + - * / and parentheses.
-Use exactly this format:
+Then write the math that solves it, using only numbers, + - * / and parentheses. Don't write the answer.
+Use exactly this format, like this example:
+PROBLEM: A robot picks 4 apples every minute. How many apples does it pick in 6 minutes?
+MATH: 4 * 6
+
+Now write a new one about {topic}.
 PROBLEM: <the word problem>
 MATH: <the math>"""
 
@@ -41,11 +45,27 @@ PROBLEM: {problem}"""
 OPS = {ast.Add: operator.add, ast.Sub: operator.sub, ast.Mult: operator.mul, ast.Div: operator.truediv}
 
 
+def clean_math(expr):
+    """Small models often write more than the math: the answer ("12 * 5 = 60"), units ("30 liters * 8"),
+    or formatting ("**MATH:** `4 * 6`"). Keep just the math part."""
+    expr = expr.split("=")[0]                                   # "12 * 5 = 60" -> "12 * 5"
+    expr = expr.replace("×", "*").replace("÷", "/").replace("`", " ").replace(",", "")
+    expr = re.sub(r"(?<=[\d)\s])[xX](?=[\s\d(])", "*", expr)    # "120 x 4" -> "120 * 4"
+    expr = re.sub(r"[A-Za-z$€£:]+", " ", expr)                  # units and words: "30 liters" -> "30"
+    return " ".join(expr.split()).strip(" *.")                  # leftover "**" or a final period
+
+
 def safe_math(expr):
     """The checker: works out simple math like (3 + 4) * 12 safely. Anything else is refused."""
-    expr = expr.replace("×", "*").replace("÷", "/").replace("x", "*").replace(",", "").strip().rstrip("=").strip()
+    expr = clean_math(expr)
     if not expr or len(expr) > 80 or not re.fullmatch(r"[\d\s+\-*/().]+", expr):
         raise ValueError("not simple math")
+    if not re.search(r"\d\s*[-+*/]\s*[\d(]", expr):           # "5 squared" would become just "5": refuse it
+        raise ValueError("no + - * / in the math")
+    try:
+        tree = ast.parse(expr, mode="eval")
+    except SyntaxError:
+        raise ValueError("the math has a mistake in it")
 
     def ev(n):
         if isinstance(n, ast.Expression):
@@ -59,13 +79,17 @@ def safe_math(expr):
         if hasattr(ast, "Num") and isinstance(n, getattr(ast, "Num")):         # older Python
             return n.n
         raise ValueError("not simple math")
-    value = ev(ast.parse(expr, mode="eval"))
+    try:
+        value = ev(tree)
+    except ZeroDivisionError:
+        raise ValueError("it divides by zero")
     if abs(value) > 1e7 or abs(value - round(value)) > 1e-9:
         raise ValueError("the answer isn't a whole number")
     return int(round(value))
 
 
 def parse_teacher(text):
+    text = text.replace("**", "").replace("__", "")              # drop bold formatting like **PROBLEM:**
     p = re.search(r"PROBLEM:\s*(.+?)\s*(?:\n|MATH:)", text, re.S | re.I)
     m = re.search(r"MATH:\s*([^\n]+)", text, re.I)
     if not p or not m:
@@ -73,7 +97,7 @@ def parse_teacher(text):
     problem = " ".join(p.group(1).split())
     if len(problem) < 20:
         raise ValueError("the problem is too short")
-    return problem, m.group(1).strip(), safe_math(m.group(1))
+    return problem, clean_math(m.group(1)), safe_math(m.group(1))
 
 
 def parse_answer(text):
