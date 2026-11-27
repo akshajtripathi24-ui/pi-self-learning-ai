@@ -83,7 +83,10 @@ class Lab:
         os.makedirs(RUNS, exist_ok=True)
         self.math = selfmath.MathAI(DATA)                    # course 1: adding and subtracting
         self.math2 = advmath.AdvancedMathAI(DATA)            # course 2: multiplying, algebra and calculus
-        self.math.paused = self.math2.paused = cfg["math_paused"]
+        self.math3 = advmath.HarderMathAI(DATA)              # course 3: decimals, quadratics, integrals
+        self.all_courses = [self.math, self.math2, self.math3]
+        for c in self.all_courses:
+            c.paused = cfg["math_paused"]
         self.bot = Chatbot(DATA, cfg)
         self.bot.running = cfg["chatbot_running"]           # keep practicing after the Pi restarts
         self.chat = Chat(self.bot, os.path.join(DATA, "chats"), tutor=self.math_ai_try)   # part 4: talk to the AI
@@ -97,7 +100,8 @@ class Lab:
                 write_json(path, r)
 
     def math_ask(self, text):
-        """You ask the math AI a question. Adding and subtracting go to course 1, everything else to course 2."""
+        """You ask the math AI a question. Whole-number adding and subtracting go to course 1, then whichever of
+        course 2 or 3 practices that kind of question."""
         m = re.fullmatch(r"\s*(\d{1,3})\s*([+\-−])\s*(\d{1,3})\s*=?\s*\??\s*", str(text))
         if m:
             a, op, b = int(m.group(1)), "-" if m.group(2) in "-−" else "+", int(m.group(3))
@@ -106,34 +110,45 @@ class Lab:
                      tokens=list("%03d" % a) + ["+" if op == "+" else "−"] + list("%03d" % b) + ["="],
                      rows=["ones", "tens", "hundreds", "thousands"])
             return r
-        r = self.math2.ask(text)
-        backward = r["question"].count("×") == 1
-        if backward:
-            r["rows"] = ["ones", "tens", "hundreds", "thousands"][:len(r["attention"][0])]
-        return r
+        why = []
+        for course in (self.math2, self.math3):
+            try:
+                r = course.ask(text)
+            except ValueError as e:
+                why.append(str(e))
+                continue
+            return r
+        exact = [w for w in why if not w.startswith("Course ")]        # "only up to 9.9" beats "it practices..."
+        raise ValueError(exact[0] if exact else "The math AI practices questions like 47+38, 7*8, 3x+5=20, d/dx 4x^3, "
+                         "2.5+1.7, x^2-5x+6=0 or integral of 6x^2")
 
     def math_ai_try(self, kind, what):
         """For the Chat tab: let your trained math AI answer, if it's the kind of question it practices."""
-        text = {"arithmetic": what, "solve": what, "derivative": "d/dx " + what}.get(kind)
+        text = {"arithmetic": what, "solve": what, "derivative": "d/dx " + what, "integral": "integral of " + what}.get(kind)
         if not text:
             return None
         try:
             r = self.math_ask(text.replace(" ", ""))
         except Exception:
-            return None                                       # not something either course practices
-        course = self.math if r["course"] == 1 else self.math2
+            return None                                       # not something any course practices
+        course = self.all_courses[r["course"] - 1]
         return {"course": r["course"], "question": r["question"], "answer": r["answer"], "truth": r["truth"],
                 "ok": str(r["answer"]) == str(r["truth"]), "level": course.state["level"] + 1,
-                "levels": len(selfmath.LEVELS if r["course"] == 1 else advmath.LEVELS), "mastered": course.state["mastered"]}
+                "levels": len(self.levels_of(course)), "mastered": course.state["mastered"]}
+
+    def levels_of(self, course):
+        return selfmath.LEVELS if course is self.math else course.levels
 
     def save_settings(self):
         write_json(SETTINGS_FILE, self.cfg)
 
     # ------------------------------------------------------------ part 1
     def training(self):
-        """Which course the math AI is learning right now."""
+        """Which course the math AI is learning right now. "auto" means the first course it hasn't mastered yet."""
         mode = self.cfg.get("math_course", "auto")
-        return self.math2 if mode == "2" or (mode == "auto" and self.math.state["mastered"]) else self.math
+        if mode in ("1", "2", "3"):
+            return self.all_courses[int(mode) - 1]
+        return next((c for c in self.all_courses if not c.state["mastered"]), self.math3)
 
     def math_loop(self):
         hot = False
@@ -141,7 +156,8 @@ class Lab:
             temp = selfmath.pi_temperature()
             if temp is not None:                  # rest if the Pi gets hot, until it's 8 °C cooler
                 hot = temp >= 78 or (hot and temp > 70)
-            self.math.hot = self.math2.hot = hot
+            for c in self.all_courses:
+                c.hot = hot
             if self.math.paused or hot:
                 time.sleep(2)
                 continue
@@ -156,23 +172,23 @@ class Lab:
 
     def courses(self):
         out = []
-        for n, c, levels in ((1, self.math, selfmath.LEVELS), (2, self.math2, advmath.LEVELS)):
-            out.append({"n": n, "name": "Course 1: Adding & subtracting" if n == 1 else advmath.AdvancedMathAI.name,
-                        "level": c.state["level"], "levels": len(levels), "mastered": c.state["mastered"],
+        for n, c in enumerate(self.all_courses, 1):
+            out.append({"n": n, "name": "Course 1: Adding & subtracting" if n == 1 else c.name,
+                        "level": c.state["level"], "levels": len(self.levels_of(c)), "mastered": c.state["mastered"],
                         "training": self.training() is c})
         return out
 
     def math_status(self, course=None):
-        course = course or (2 if self.training() is self.math2 else 1)
-        if course == 2:
-            m = self.math2
+        course = course or self.all_courses.index(self.training()) + 1
+        if course in (2, 3):
+            m = self.all_courses[course - 1]
             with m.lock:
                 st = m.state
                 hist = st["history"]
                 step = max(1, len(hist) // 400)
                 per = sum(m.speed) / len(m.speed) if m.speed else None
-                return {"course": 2, "courses": self.courses(), "mode": self.cfg.get("math_course", "auto"), "pass": round(advmath.PASS * 100),
-                        "level": st["level"], "levels": [l["name"] for l in advmath.LEVELS], "mastered": st["mastered"], "round": st["round"],
+                return {"course": course, "courses": self.courses(), "mode": self.cfg.get("math_course", "auto"), "pass": round(advmath.PASS * 100),
+                        "level": st["level"], "levels": [l["name"] for l in m.levels], "mastered": st["mastered"], "round": st["round"],
                         "questions": st["questions"], "notebook": len(st["notebook"]), "tests": st["tests"][-300:],
                         "history": hist[::step], "level_ups": st["level_ups"], "seconds": round(st["seconds"]),
                         "paused": m.paused, "hot": m.hot, "temp": selfmath.pi_temperature(), "feed": list(m.feed)[:24],
@@ -267,7 +283,7 @@ class Handler(BaseHTTPRequestHandler):
                     return self._send(200, f.read(), "text/html; charset=utf-8")
             if path == "/api/math":
                 c = parse_qs(urlparse(self.path).query).get("course", [""])[0]
-                return self._send(200, lab.math_status(int(c) if c in ("1", "2") else None))
+                return self._send(200, lab.math_status(int(c) if c in ("1", "2", "3") else None))
             if path == "/api/collapse":
                 return self._send(200, lab.collapse_status())
             if path == "/api/chatbot":
@@ -287,17 +303,20 @@ class Handler(BaseHTTPRequestHandler):
             n = int(self.headers.get("Content-Length") or 0)
             body = json.loads(self.rfile.read(n) or b"{}") if n else {}
             if path in ("/api/math/pause", "/api/math/resume"):
-                lab.math.paused = lab.math2.paused = lab.cfg["math_paused"] = path.endswith("pause")
+                lab.cfg["math_paused"] = path.endswith("pause")
+                for c in lab.all_courses:
+                    c.paused = lab.cfg["math_paused"]
                 lab.save_settings()
                 return self._send(200, {"paused": lab.math.paused})
             if path == "/api/math/reset":
-                course = lab.math2 if body.get("course") == 2 else lab.math
+                n = body.get("course")
+                course = lab.all_courses[n - 1] if n in (1, 2, 3) else lab.math
                 course.reset()
                 course.save()
                 return self._send(200, {"ok": True})
             if path == "/api/math/mode":
                 mode = str(body.get("mode", "auto"))
-                lab.cfg["math_course"] = mode if mode in ("auto", "1", "2") else "auto"
+                lab.cfg["math_course"] = mode if mode in ("auto", "1", "2", "3") else "auto"
                 lab.save_settings()
                 return self._send(200, {"ok": True})
             if path == "/api/math/ask":
@@ -324,7 +343,10 @@ class Handler(BaseHTTPRequestHandler):
                     lab.bot.connection = lab.bot.llm.check()
                 return self._send(200, lab.chatbot_status())
             if path == "/api/chat/send":
-                cid = lab.chat.send(body.get("text", ""), body.get("chat") or None)
+                try:
+                    cid = lab.chat.send(body.get("text", ""), body.get("chat") or None)
+                except ValueError as e:
+                    return self._send(400, {"error": str(e)})
                 if not cid:
                     return self._send(409, {"error": "It's still answering your last message."})
                 return self._send(200, lab.chat.status(cid))
@@ -376,6 +398,8 @@ def main():
         def finish():
             lab.math.save()
             lab.math2.save()
+            lab.math3.save()
+            lab.chat.save_all()
             lab.stop_collapse("the program restarted (for example after an update)")
             print("saved. bye!", flush=True)
             os._exit(0)

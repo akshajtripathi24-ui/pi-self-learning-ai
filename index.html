@@ -121,7 +121,7 @@ footer{text-align:center;color:var(--muted);font-size:12px;padding:20px}footer a
       <div class="stat"><div class="k">Brain size</div><div class="v" id="msize">-</div></div>
     </div>
     <label for="mmode">What it trains</label>
-    <select id="mmode"><option value="auto">Automatic: course 2 after course 1</option><option value="1">Course 1 only</option><option value="2">Course 2 now</option></select>
+    <select id="mmode"><option value="auto">Automatic: the next course it hasn't mastered</option><option value="1">Course 1 only</option><option value="2">Course 2 now</option><option value="3">Course 3 now</option></select>
     <div class="bar"><button class="ghost small" id="mpause">⏸️ Pause</button><button class="ghost small" id="mreset">⚠️ Start this course over</button></div>
   </section>
   <section class="card full">
@@ -136,7 +136,7 @@ footer{text-align:center;color:var(--muted);font-size:12px;padding:20px}footer a
   </section>
   <section class="card">
     <h2>🙋 Ask it a question</h2>
-    <p class="muted" style="margin-top:0">Course 1: <code>47+38</code>, <code>500-123</code>. Course 2: <code>7*8</code>, <code>47*8</code>, <code>3x+5=20</code>, <code>d/dx 4x^3</code>, <code>d/dx 3x^2-5x</code></p>
+    <p class="muted" style="margin-top:0">Course 1: <code>47+38</code>, <code>500-123</code>. Course 2: <code>7*8</code>, <code>47*8</code>, <code>3x+5=20</code>, <code>d/dx 4x^3</code>, <code>d/dx 3x^2-5x</code>. Course 3: <code>2.5+1.7</code>, <code>38.6-12.9</code>, <code>4.5*6</code>, <code>x^2-5x+6=0</code>, <code>integral of 6x^2</code>, <code>d/dx x^3-4x^2+7x</code></p>
     <div class="row"><div><input type="text" id="qtext" value="47+38" aria-label="Your question"></div><div style="flex:0 0 auto"><button id="qgo">Ask</button></div></div>
     <div id="qout" class="msg"></div>
   </section>
@@ -179,6 +179,7 @@ footer{text-align:center;color:var(--muted);font-size:12px;padding:20px}footer a
     <label>Kinds of question</label>
     <div class="bar" style="margin-top:0">
       <div class="check"><input type="checkbox" id="xt-arithmetic" class="xtopic" value="arithmetic"><label for="xt-arithmetic" style="margin:0">Arithmetic (12 × 5)</label></div>
+      <div class="check"><input type="checkbox" id="xt-decimals" class="xtopic" value="decimals"><label for="xt-decimals" style="margin:0">Decimals (2.5 × 4)</label></div>
       <div class="check"><input type="checkbox" id="xt-algebra" class="xtopic" value="algebra"><label for="xt-algebra" style="margin:0">Algebra (solve for x)</label></div>
       <div class="check"><input type="checkbox" id="xt-calculus" class="xtopic" value="calculus"><label for="xt-calculus" style="margin:0">Calculus (derivatives)</label></div>
     </div>
@@ -196,7 +197,7 @@ footer{text-align:center;color:var(--muted);font-size:12px;padding:20px}footer a
 <main id="page-chat" class="hide">
   <section class="card full">
     <h2>🗨️ Talk to the AI</h2>
-    <p class="muted" style="margin-top:0">Ask anything, even with spelling mistakes. ✏️ It fixes your message, 🧮 a math engine works out any arithmetic, algebra or calculus exactly, 🧠 your trained math AI has a go too, 📒 checked practice problems help with word problems, and 🔗 it remembers related things from your other chats. Every chat is saved on the Pi. It's the same small AI as the Chatbot tab (<b id="chatmodel">not connected yet</b>), so it can still be wrong about facts. <a href="https://github.com/akshajtripathi24-ui/pi-self-learning-ai/blob/main/docs/07-chat.md" target="_blank" rel="noopener" style="color:var(--accent)">How it works</a></p>
+    <p class="muted" style="margin-top:0">Ask anything, even with spelling mistakes. ✏️ It fixes your message, 🧮 a math engine works out any arithmetic, decimals, algebra or calculus exactly, 🧠 your trained math AI has a go too, 📒 checked practice problems help with word problems, and 🔗 it remembers related things from your other chats. Every chat is saved on the Pi. It's the same small AI as the Chatbot tab (<b id="chatmodel">not connected yet</b>), so it can still be wrong about facts. <a href="https://github.com/akshajtripathi24-ui/pi-self-learning-ai/blob/main/docs/07-chat.md" target="_blank" rel="noopener" style="color:var(--accent)">How it works</a></p>
     <div class="chatwrap">
       <aside class="chatside">
         <button id="chatnew" style="width:100%">➕ New chat</button>
@@ -338,7 +339,7 @@ $('qgo').onclick = async () => {
     const ok = r.answer === r.truth || String(r.answer) === String(r.truth);
     $('qout').innerHTML = `<div class="muted">Answered by course ${r.course}</div><div style="font-size:22px;font-weight:800;margin:6px 0">${esc(r.question)} = ${r.answer == null ? '?' : esc(r.answer)} <span class="${ok ? 'ok' : 'no'}">${ok ? '✅' : '❌ (it\'s ' + esc(r.truth) + ')'}</span></div>
       <div class="muted">Where it "looked" while writing each part of the answer (its attention):</div>
-      <table class="heat"><tr><th></th>${r.tokens.map(t => `<th>${esc(t)}</th>`).join('')}</tr>` +
+      <table class="heat"><tr><th></th>${r.tokens.map(t => `<th>${esc(t === 'S' ? '∫' : t)}</th>`).join('')}</tr>` +
       att.map((row, i) => `<tr><th style="width:auto;padding-right:6px;text-align:right">${esc(r.rows[i] || '')}</th>${row.map(v => `<td style="background:rgba(57,135,229,${Math.min(1, v * 2.2).toFixed(2)})"></td>`).join('')}</tr>`).join('') + '</table>' +
       '<div class="muted" style="font-size:12px;margin-top:6px">Brighter = looked more. For adding, a good math AI looks at the matching digits (ones at the ones), like you do!</div>';
   } catch (e) { $('qout').textContent = '❌ ' + e.message; }
@@ -441,9 +442,16 @@ let chatId = store.get('chat') || null;        // the chat you're looking at (nu
 const same = (a, b) => a.toLowerCase().replace(/[^a-z0-9]/g, '') === b.toLowerCase().replace(/[^a-z0-9]/g, '');
 const when = t => { const d = new Date(t * 1000), now = new Date();
   return d.toDateString() === now.toDateString() ? 'Today ' + d.toLocaleTimeString([], {hour: 'numeric', minute: '2-digit'}) : d.toLocaleDateString([], {month: 'short', day: 'numeric'}); };
-function openChat(id) { chatId = id; store.set('chat', id || ''); chatHtml = ''; loadChat(); }
+function openChat(id) { chatId = id; store.set('chat', id || ''); chatHtml = ''; chatAsk++; chatLoading = false; loadChat(); }
+let chatLoading = false, chatAsk = 0;
 async function loadChat() {
-  try { chat = await api('/api/chat' + (chatId ? '?id=' + encodeURIComponent(chatId) : '')); } catch (e) { return; }
+  if (chatLoading) return;                              // a slow Pi: don't start another refresh until this one's back
+  chatLoading = true;
+  const ask = ++chatAsk, wanted = chatId;
+  try { chat = await api('/api/chat' + (wanted ? '?id=' + encodeURIComponent(wanted) : '')); }
+  catch (e) { return; }
+  finally { chatLoading = false; }
+  if (ask !== chatAsk || wanted !== chatId) return;      // you switched chats meanwhile: this answer is out of date
   const c = chat;
   if (chatId && !c.chat) { chatId = null; store.set('chat', ''); }          // it was deleted
   $('chatmodel').textContent = c.model || 'not connected yet';
@@ -469,13 +477,17 @@ async function loadChat() {
       if (a.examples) notes += `<div class="fix">📒 Used ${a.examples} checked example${a.examples > 1 ? 's' : ''} from the Chatbot's practice</div>`;
       if (a.memories && a.memories.length) notes += `<div class="fix">🔗 Remembered from: ${a.memories.map(x => `<a data-open="${esc(x.chat)}">${esc(x.title)}</a>`).join(', ')}</div>`;
       if (a.engine && a.engine.steps && a.engine.steps.length) notes += `<details class="steps"><summary>📝 Show the steps</summary><ol>${a.engine.steps.map(st => `<li>${esc(st)}</li>`).join('')}</ol></details>`;
-      if (a.stopped) notes += `<div class="fix">⏹️ Stopped</div>`;
+      if (a.retried && !a.refused) notes += `<div class="fix">🔁 It first said it couldn't help, so it tried again with a simpler question</div>`;
+      if (a.refused) notes += `<div class="fix">🤔 This small AI said it can't help. If it's a normal question, try asking it a different way, or press 🔄 Try again.</div>`;
+      if (a.stopped) notes += `<div class="fix">⏹️ ${a.interrupted ? 'Cut off: the Pi restarted while it was writing' : 'Stopped'}</div>`;
       const last = mi === msgs.length - 1 && i === m.answers.length - 1;
       const acts = a.writing ? '' : `<div class="acts"><button class="act" data-say="${mi}:${i}">🔊 Read aloud</button>${last && !c.busy ? '<button class="act" data-regen="1">🔄 Try again</button>' : ''}</div>`;
       return `<div class="bubble ai">${many ? `<b>${i + 1}. ${esc(a.q)}</b>\n` : ''}${esc(a.a)}${a.writing ? '<span class="cursor">▌</span>' : ''}${notes}${acts}</div>`;
     }).join('');
     if (m.skipped && m.answers.length === 3) h += `<div class="bubble ai">I answered the first 3 questions. Ask the other ${m.skipped} in a new message!</div>`;
-    if (m.error) h += `<div class="bubble ai" style="border-color:var(--bad)">⚠️ ${esc(m.error)}</div>`;
+    const lastMsg = mi === msgs.length - 1 && !c.busy;
+    if (m.stopped && !m.answers.length) h += `<div class="bubble ai">⏹️ Stopped before answering.${lastMsg ? '<div class="acts"><button class="act" data-regen="1">🔄 Try again</button></div>' : ''}</div>`;
+    if (m.error) h += `<div class="bubble ai" style="border-color:var(--bad)">⚠️ ${esc(m.error)}${lastMsg ? '<div class="acts"><button class="act" data-regen="1">🔄 Try again</button></div>' : ''}</div>`;
     return h;
   }).join('') || '<p class="muted">Ask your first question below. Try one with mistakes, like: wat is the bigest planet and how far is it</p>';
   if (html !== chatHtml) {
@@ -497,18 +509,26 @@ async function loadChat() {
   $('chatstop').classList.toggle('hide', !(c.busy && here));
   $('chatexport').disabled = !c.chat;
 }
+let chatSending = false;
 async function sendChat() {
   const text = $('chatin').value.trim();
-  if (!text || (chat && chat.busy)) return;
+  if (!text || chatSending || (chat && chat.busy)) return;
+  chatSending = true;
   $('chatin').value = '';
   try { const r = await post('/api/chat/send', {text, chat: chatId}); if (r.chat) { chatId = r.chat.id; store.set('chat', chatId); } }
-  catch (e) { $('chatstage').textContent = '⚠️ ' + e.message; }
-  loadChat();
+  catch (e) { $('chatin').value = text; $('chatstage').textContent = '⚠️ ' + e.message; }   // give your text back
+  finally { chatSending = false; }
+  chatAsk++; chatLoading = false;                       // a refresh that started before you sent is out of date
+  chatHtml = ''; loadChat();
 }
 $('chatsend').onclick = sendChat;
-$('chatstop').onclick = async () => { await post('/api/chat/stop'); loadChat(); };
+$('chatstop').onclick = async () => {
+  try { await post('/api/chat/stop', {}); } catch (e) { $('chatstage').textContent = '⚠️ ' + e.message; }
+  loadChat();
+};
 async function regenerate() {
   try { await post('/api/chat/regenerate', {chat: chatId}); } catch (e) { $('chatstage').textContent = '⚠️ ' + e.message; }
+  chatAsk++; chatLoading = false; chatHtml = '';        // show the new answer starting, not an out-of-date refresh
   loadChat();
 }
 // 🔊 read aloud, with the browser's own voice (nothing is sent anywhere)

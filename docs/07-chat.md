@@ -26,12 +26,19 @@ Like other chatbots, you can have lots of separate chats:
    - it brought in lots of new words.
    Then it just uses what you typed.
 3. **✂️ It splits your questions.** "What's 47 times 38? And why do robots need sensors?" gets two separate answers, up to 3 per message.
-4. **🧮 The math engine works out any math exactly.** Arithmetic ("47 times 38", "1,250 divided by 4", "7 squared"), algebra ("solve 3x + 5 = 20", "x^2 - 5x + 6 = 0") and calculus ("derivative of 4x^3 + 2x", "integral of 6x^2"). The AI is told the exact answer, so it can't get the math wrong, and explains the steps.
-   - **🧠 Your trained math AI has a go too,** if it's the kind of question one of its courses practices (like `47+38`, `7*8`, `3x+5=20` or `d/dx 4x^3`). You'll see its answer with ✅ or ❌, and the level it's on, so you can watch it get better.
+4. **🧮 The math engine works out any math exactly.** Arithmetic ("47 times 38", "1,250 divided by 4", "7 squared", "-5 + 3"), **decimals** ("2.5 + 1.75", "10 divided by 4" is 2.5), **percentages** ("15% of 80"), **square roots** ("square root of 6.25"), algebra ("solve 3x + 5 = 20", "0.5x + 1.2 = 3", "x^2 - 5x + 6 = 0") and calculus ("derivative of 4x^3 + 2x", "integral of 6x^2"). The AI is told the exact answer, so it can't get the math wrong, and explains the steps.
+   - Answers that end are shown as decimals (10 ÷ 4 = 2.5). Answers that never end are shown as a fraction *and* a rounded decimal: 10 ÷ 3 = 10/3 (about 3.33333). Dividing by 0 says you can't.
+   - **🧠 Your trained math AI has a go too,** if it's the kind of question one of its courses practices (like `47+38`, `7*8`, `3x+5=20`, `d/dx 4x^3`, `2.5+1.7`, `x^2-5x+6=0` or `integral of 6x^2`). You'll see its answer with ✅ or ❌, and the level it's on, so you can watch it get better.
    - **📒 For word problems** (no equation to solve), it finds up to 2 similar problems from the Chatbot's practice that were **checked twice** (Python and the AI agreed), and shows them to the AI as examples.
-5. **🤔 It answers,** remembering your last two questions, so you can ask follow-ups like "and how big is it?"
+5. **🤔 It answers,** remembering your last 3 questions and answers, so you can ask follow-ups like "and how big is it?"
+6. **🙅 If it wrongly says "I can't assist with that",** it tries once more with simpler instructions. Small AIs sometimes refuse normal questions, often because the instructions were long and confusing. If it *still* refuses, the answer is marked, and you can press 🔄 Try again. Refusals are never used as memories or as earlier messages, so one refusal can't cause more.
 
 While you chat, the Chatbot's practice **pauses**, so your answers come faster. It carries on by itself about 20 seconds after your last answer.
+
+## If something goes wrong
+- **If the Pi restarts while it's writing,** the part it already wrote is kept and marked "interrupted". If it restarted before it wrote anything, the chat says so. Either way, press 🔄 Try again.
+- **If the model takes too long or crashes,** you get a clear message (like "the model took too long") and a 🔄 Try again button, and your chat still gets a title.
+- **If sending fails,** what you typed is put back in the box, so you don't have to type it again.
 
 ## Good to know
 - **It's a small AI, so it can be wrong about facts,** especially dates, names and numbers that Python didn't check. Double-check anything important.
@@ -39,4 +46,6 @@ While you chat, the Chatbot's practice **pauses**, so your answers come faster. 
 - Each answer takes about 20–60 seconds on a Pi 4.
 - Chats are saved in `data/chats/` on the Pi, which never goes to GitHub.
 
-**Tested:** the safety check with 16 typical "fixes" (good fixes, answers pretending to be fixes, and fixes that changed the question): all 16 handled correctly. The whole chat was tested with a pretend model server: fixing, splitting into 2 questions, Python's math (47 × 38 = 1,786), refusing an answer that pretended to be a fix, and pausing the practice.
+**Tested (again, after the bug hunt):** with a pretend model that refuses on purpose (it said no, then answered on the retry), a model that refuses every time (marked), a restart halfway through an answer (the half answer was kept), pressing Stop while it was still fixing the spelling, two questions in one message (the second one saw the first), sending an empty message, and 30 kinds of math with decimals, percentages, square roots and negative numbers.
+
+**Tested before:** the safety check with 16 typical "fixes" (good fixes, answers pretending to be fixes, and fixes that changed the question): all 16 handled correctly. The whole chat was tested with a pretend model server: fixing, splitting into 2 questions, Python's math (47 × 38 = 1,786), refusing an answer that pretended to be a fix, and pausing the practice.

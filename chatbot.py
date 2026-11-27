@@ -73,7 +73,18 @@ ANSWER: <just the derivative, like 6x + 2>
 
 PROBLEM: {problem}"""
 
-KINDS = ("arithmetic", "algebra", "calculus")       # the kinds of question the teacher can write
+DECIMALS_PROMPT = """Write one short math word problem for a 12-year-old about {topic} that uses decimal numbers,
+like money or measurements (for example 2.5 or 0.75). Then write the math that solves it, using only numbers,
++ - * / and parentheses. Don't write the answer.
+Use exactly this format, like this example:
+PROBLEM: A rover drives 2.5 meters every second. How far does it drive in 4 seconds?
+MATH: 2.5 * 4
+
+Now write a new one about {topic}.
+PROBLEM: <the word problem>
+MATH: <the math>"""
+
+KINDS = ("arithmetic", "decimals", "algebra", "calculus")       # the kinds of question the teacher can write
 
 
 OPS = {ast.Add: operator.add, ast.Sub: operator.sub, ast.Mult: operator.mul, ast.Div: operator.truediv}
@@ -86,7 +97,8 @@ def clean_math(expr):
     expr = expr.replace("×", "*").replace("÷", "/").replace("`", " ").replace(",", "")
     expr = re.sub(r"(?<=[\d)\s])[xX](?=[\s\d(])", "*", expr)    # "120 x 4" -> "120 * 4"
     expr = re.sub(r"[A-Za-z$€£:]+", " ", expr)                  # units and words: "30 liters" -> "30"
-    return " ".join(expr.split()).strip(" *.")                  # leftover "**" or a final period
+    expr = " ".join(expr.split()).strip(" *").rstrip(".").strip(" *")    # leftover "**" or a final period
+    return re.sub(r"(?<![\d.])\.(?=\d)", "0.", expr)                       # ".5" -> "0.5"
 
 
 def safe_math(expr, whole=True):
@@ -176,6 +188,25 @@ def parse_kind(text, kind):
     if kind == "arithmetic":
         problem, math_text, truth = parse_teacher(text)
         return problem, math_text, truth, "%s = %s" % (math_text, truth)
+    if kind == "decimals":
+        text = text.replace("**", "").replace("__", "")
+        p = re.search(r"PROBLEM:\s*(.+?)\s*(?:\n|MATH:)", text, re.S | re.I)
+        m = re.search(r"MATH:\s*([^\n]+)", text, re.I)
+        if not p or not m:
+            raise ValueError("didn't follow the format")
+        problem, math_text = " ".join(p.group(1).split()), clean_math(m.group(1))
+        if len(problem) < 20:
+            raise ValueError("the problem is too short")
+        if not re.search(r"\d\s*[-+*/]\s*[\d(]", math_text):
+            raise ValueError("no + - * / in the math")
+        try:
+            value = mathengine.parse(math_text).value()           # exact, so 0.1 + 0.2 is exactly 0.3
+        except mathengine.MathError as e:
+            raise ValueError("the math can't be worked out (%s)" % e)
+        shown = mathengine.fmt_number(value)
+        if "/" in shown or ("." in shown and len(shown.split(".")[1]) > 3) or abs(value) > 10 ** 7:
+            raise ValueError("the answer needs more than 3 decimal places")
+        return problem, math_text, shown, "%s = %s" % (math_text, shown)
     text = text.replace("**", "").replace("__", "")
     label = "EQUATION" if kind == "algebra" else "FUNCTION"
     p = re.search(r"PROBLEM:\s*(.+?)\s*(?:\n|%s:)" % label, text, re.S | re.I)
@@ -208,6 +239,9 @@ def parse_kind(text, kind):
 
 def check_answer(kind, reply, truth):
     """Mark the student's answer. Derivatives are compared as math, so 2x + 6x^2 counts the same as 6x^2 + 2x."""
+    if kind == "decimals":
+        answer = parse_answer(reply)
+        return answer, answer is not None and abs(answer - float(truth)) < 1e-6
     if kind != "calculus":
         answer = parse_answer(reply)
         return answer, answer is not None and abs(answer - truth) < 1e-9
@@ -413,7 +447,7 @@ class Chatbot:
         kind = self.rng.choice([k for k in st["settings"].get("topics", ["arithmetic"]) if k in KINDS] or ["arithmetic"])
         t0 = time.time()
         self.stage, self.stage_since = "teacher", time.time()
-        prompt = {"arithmetic": TEACHER_PROMPT, "algebra": ALGEBRA_PROMPT, "calculus": CALCULUS_PROMPT}[kind]
+        prompt = {"arithmetic": TEACHER_PROMPT, "decimals": DECIMALS_PROMPT, "algebra": ALGEBRA_PROMPT, "calculus": CALCULUS_PROMPT}[kind]
         teacher = self.llm.ask(prompt.format(topic=topic), max_tokens=170, temperature=0.9)                # 1. teacher
         try:
             problem, math_text, truth, worked = parse_kind(teacher, kind)                                  # 2. checker

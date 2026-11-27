@@ -12,6 +12,7 @@ that isn't numbers, x, + - * / ^ and brackets. That makes it safe to use on what
 """
 import math
 import re
+from decimal import Decimal
 from fractions import Fraction
 
 MAX_POWER = 8            # x^8 is plenty for school math, and keeps the work small
@@ -83,7 +84,7 @@ class Poly:
                 body = cs
             else:
                 xs = "x" if p == 1 else "x^%d" % p
-                body = xs if c == 1 else ("(%s)%s" % (cs, xs) if c.denominator != 1 else cs + xs)
+                body = xs if c == 1 else ("(%s)%s" % (cs, xs) if "/" in cs else cs + xs)
             parts.append((sign, body))
         first_sign, first = parts[0]
         out = ("-" if first_sign == "-" else "") + first
@@ -93,8 +94,24 @@ class Poly:
 
 
 def fmt_number(f):
+    """Whole numbers as they are, numbers that end as decimals as decimals (5/2 -> 2.5, 18/5 -> 3.6),
+    and others as fractions (7/3), because 2.333... never ends."""
     f = Fraction(f)
-    return str(f.numerator) if f.denominator == 1 else "%d/%d" % (f.numerator, f.denominator)
+    if f.denominator == 1:
+        return str(f.numerator)
+    d = f.denominator
+    for p in (2, 5):
+        while d % p == 0:
+            d //= p
+    if d == 1:                                        # only 2s and 5s underneath: it ends, so write it as a decimal
+        text = str(Decimal(f.numerator) / Decimal(f.denominator))
+        if len(text) <= 14:
+            return text
+    return "%d/%d" % (f.numerator, f.denominator)
+
+
+def is_decimal_text(text):
+    return "/" not in text
 
 
 # ---------------------------------------------------------------- reading math text, one symbol at a time
@@ -154,8 +171,13 @@ class _Reader:
         if self.peek() == "^":
             self.take()
             power = self.factor()
+            if base.is_number() and power.is_number() and power.value().denominator == 1 and abs(power.value()) <= 64:
+                b, n = base.value(), int(power.value())         # a plain number, like 2^10 or 10^-2
+                if b == 0 and n < 0:
+                    raise MathError("I can only divide by a number that isn't 0")
+                return Poly.num(b ** n)
             if not power.is_number() or power.value().denominator != 1 or not 0 <= power.value() <= MAX_POWER:
-                raise MathError("powers must be whole numbers from 0 to %d" % MAX_POWER)
+                raise MathError("powers of x must be whole numbers from 0 to %d" % MAX_POWER)
             out = Poly.num(1)
             for _ in range(int(power.value())):
                 out = out * base
@@ -237,7 +259,7 @@ def _term(c, n):
         return _x(n)
     if c == -1:
         return "-" + _x(n)
-    return ("(%s)" % fmt_number(c) if Fraction(c).denominator != 1 else fmt_number(c)) + _x(n)
+    return ("(%s)" % fmt_number(c) if "/" in fmt_number(c) else fmt_number(c)) + _x(n)
 
 
 def steps(kind, what):
@@ -272,7 +294,19 @@ def steps(kind, what):
             out.append("Add + C: any number's derivative is 0, so we can't tell which number was there.")
             out.append("So the integral is %s + C" % p.integral())
             return out
-    except (MathError, ZeroDivisionError):
+        if kind == "percent":
+            pct, of = [Fraction(x) for x in re.findall(r"-?\d+(?:\.\d+)?", what)[:2]]
+            return ["%s%% means %s out of 100: %s ÷ 100 = %s" % (fmt_number(pct), fmt_number(pct), fmt_number(pct), fmt_number(pct / 100)),
+                    "Multiply: %s × %s = %s" % (fmt_number(pct / 100), fmt_number(of), fmt_number(pct / 100 * of))]
+        if kind == "sqrt":
+            n = Fraction(what.lstrip("√"))
+            root = _exact_sqrt(n)
+            if root is not None:
+                return ["%s × %s = %s, so √%s = %s" % (fmt_number(root), fmt_number(root), fmt_number(n), fmt_number(n), fmt_number(root))]
+            lo = math.isqrt(int(n))
+            return ["%d × %d = %d and %d × %d = %d, so √%s is between %d and %d" % (lo, lo, lo * lo, lo + 1, lo + 1, (lo + 1) ** 2, fmt_number(n), lo, lo + 1),
+                    "It doesn't come out exactly, so it's about %.6g" % math.sqrt(n)]
+    except (MathError, ZeroDivisionError, ValueError):
         pass
     return []
 
@@ -359,15 +393,33 @@ def find_problem(text):
             return "solve", eq.replace(" ", ""), show_x(solve(eq))
         except MathError as e:
             return "solve", eq.replace(" ", ""), str(e)
-    # plain arithmetic: the longest piece of math with an operator in it
-    for piece in sorted(re.findall(r"[\d(][\d\s+\-*/^().]*[\d)]", t.replace(",", "")), key=len, reverse=True):
-        if not re.search(r"\d\s*[-+*/^]\s*[\d(]", piece):
+    t = t.replace(",", "")
+    # percentages: "15% of 80", "what is 20 percent of 45.5"
+    m = re.search(r"(-?\d+(?:\.\d+)?)\s*(?:%|percent)\s*of\s*(-?\d+(?:\.\d+)?)", t)
+    if m:
+        return "percent", "%s%% of %s" % (m.group(1), m.group(2)), show_value(Fraction(m.group(1)) / 100 * Fraction(m.group(2)))
+    # square roots: "square root of 50", "sqrt(16)", "√2"
+    m = re.search(r"(?:square root of|sqrt|√)\s*\(?\s*(\d+(?:\.\d+)?)", t)
+    if m:
+        n = Fraction(m.group(1))
+        root = _exact_sqrt(n)
+        return "sqrt", "√" + m.group(1), fmt_number(root) if root is not None else "about %.6g" % math.sqrt(n)
+    # plain arithmetic: the longest piece of math with an operator in it (a minus at the start counts: -5 + 3)
+    for piece in sorted(re.findall(r"(?:(?<![\d)])-)?[\d(][\d\s+\-*/^().]*[\d)]", t), key=len, reverse=True):
+        if not re.search(r"\d\s*[-+*/^]\s*[-\d(]", piece):
             continue
         try:
             p = parse(piece)
             if p.is_number():
-                v = p.value()
-                return "arithmetic", " ".join(piece.split()), fmt_number(v) if v.denominator == 1 else "%s (about %.6g)" % (fmt_number(v), float(v))
-        except MathError:
+                return "arithmetic", " ".join(piece.split()), show_value(p.value())
+        except MathError as e:
+            if "divide" in str(e):
+                return "arithmetic", " ".join(piece.split()), "nothing: you can't divide by 0"
             continue
     return None
+
+
+def show_value(v):
+    """2.5 stays 2.5; 7/3 becomes '7/3 (about 2.33333)'."""
+    text = fmt_number(v)
+    return text if "/" not in text else "%s (about %.6g)" % (text, float(v))

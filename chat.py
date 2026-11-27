@@ -10,6 +10,7 @@ Chats are saved on the Pi (data/chats/), each with a title the AI writes, so you
 While you chat, the self-quizzing practice pauses, so you get answers faster.
 """
 import difflib
+import http.client
 import json
 import os
 import re
@@ -42,6 +43,18 @@ Title: Space station speed
 
 Question: {question}
 Title:"""
+
+RETRY_SYSTEM = """You are a helpful teacher for a high school student. Answer the question clearly and simply in 2 to 4 sentences.
+Only refuse if the question asks for something truly dangerous or harmful."""
+
+REFUSAL = re.compile(r"(i('m| am) sorry,? but i (can('|no)t|won't|am not able|am unable)|i can('|no)t (assist|help|provide|answer|do that|comply)|"
+                     r"i('m| am) (not able|unable) to (assist|help|answer|provide)|as an ai( language model)?,? i (can('|no)t|don't))", re.I)
+
+
+def is_refusal(text):
+    """Small models sometimes refuse harmless questions ("I'm sorry, but I can't assist with that.")."""
+    return bool(REFUSAL.search((text or "")[:160]))
+
 
 # words too common to tell chats apart, for finding related things in your other chats
 COMMON = {"what", "when", "where", "which", "while", "with", "would", "could", "should", "there", "their", "them", "they",
@@ -114,7 +127,8 @@ def split_questions(text, most=3):
 def describe(kind, what, answer):
     """How the math engine's answer is shown, and told to the AI."""
     return {"solve": "%s, so %s" % (what, answer), "derivative": "d/dx (%s) = %s" % (what, answer),
-            "integral": "the integral of %s is %s" % (what, answer)}.get(kind, "%s = %s" % (what.replace("*", "×"), answer))
+            "integral": "the integral of %s is %s" % (what, answer), "sqrt": "%s = %s" % (what, answer),
+            "percent": "%s = %s" % (what, answer)}.get(kind, "%s = %s" % (what.replace("*", "×"), answer))
 
 
 def content_words(text):
@@ -125,7 +139,7 @@ def clean_title(text, fallback):
     """The AI's title, tidied up. If it's empty or looks like an answer, use the first words of the question."""
     t = (text or "").strip().split("\n")[0]
     t = re.sub(r"^\s*title\s*:\s*", "", t, flags=re.I).strip().strip('"\'*.!?: ')
-    if not t or len(t) > 45 or len(t.split()) > 7:
+    if not t or len(t) > 45 or len(t.split()) > 7 or is_refusal(t):
         words = re.sub(r"[?!.,]", "", fallback).split()
         t = " ".join(words[:5]) + ("…" if len(words) > 5 else "")
     return t[:60] or "New chat"
@@ -144,6 +158,7 @@ class Chat:
                 try:
                     with open(os.path.join(folder, name)) as f:
                         c = json.load(f)
+                    self._tidy(c)
                     self.chats[c["id"]] = c
                 except (OSError, ValueError, KeyError):
                     pass
@@ -151,7 +166,26 @@ class Chat:
         self.stage, self.stage_since = None, 0
         self.stop_asked = False
 
+    @staticmethod
+    def _tidy(c):
+        """An answer that was being written when the Pi restarted would otherwise say "writing" forever."""
+        for m in c["messages"]:
+            for a in m.get("answers", []):
+                if a.get("writing"):
+                    a["writing"], a["stopped"], a["interrupted"] = False, True, True
+        if c["messages"]:
+            last = c["messages"][-1]
+            if not last.get("answers") and not last.get("error") and not last.get("stopped"):
+                last["error"] = "The Pi restarted before it answered. Press 🔄 Try again."
+
     # ------------------------------------------------------------ saving and listing chats
+    def save_all(self):
+        """When the program is shut down (like for an update), save what's been written so far."""
+        with self.lock:
+            for c in self.chats.values():
+                if c["id"] == self.busy_chat:
+                    self._save(c)
+
     def _save(self, chat):
         path = os.path.join(self.folder, chat["id"] + ".json")
         with open(path + ".tmp", "w") as f:
@@ -165,8 +199,8 @@ class Chat:
     def status(self, chat_id=None):
         with self.lock:
             c = self.chats.get(chat_id)
-            return {"chats": self._list(),
-                    "chat": {"id": c["id"], "title": c["title"], "messages": c["messages"][-60:]} if c else None,
+            chat = json.loads(json.dumps({"id": c["id"], "title": c["title"], "messages": c["messages"][-60:]})) if c else None
+            return {"chats": self._list(), "chat": chat,      # (a copy: the answer keeps changing while it's written)
                     "busy": self.busy, "busy_chat": self.busy_chat, "stage": self.stage,
                     "stage_seconds": round(time.time() - self.stage_since) if self.stage else None,
                     "speed": self.bot.llm.speed, "model": self.bot.llm.model_name}
@@ -201,8 +235,10 @@ class Chat:
     def send(self, text, chat_id=None):
         """Returns the chat's id (a new chat if chat_id is empty), or None if it's still busy."""
         text = " ".join(str(text).split())[:600]
+        if not text:
+            raise ValueError("Type a question first.")
         with self.lock:
-            if self.busy or not text:
+            if self.busy:
                 return None
             c = self.chats.get(chat_id) or self._new()
             msg = {"you": text, "fixed": None, "answers": [], "error": None, "time": time.time()}
@@ -226,7 +262,7 @@ class Chat:
             if self.busy or not c or not c["messages"]:
                 return None
             msg = c["messages"][-1]
-            msg["answers"], msg["error"] = [], None
+            msg["answers"], msg["error"], msg["stopped"] = [], None, False
             self.busy, self.busy_chat, self.stop_asked = True, c["id"], False
         threading.Thread(target=self._work, args=(c, msg, True), daemon=True).start()
         return c["id"]
@@ -249,6 +285,8 @@ class Chat:
             for c in others:
                 for m in c["messages"]:
                     for a in m.get("answers", []):
+                        if not a.get("a") or a.get("refused") or is_refusal(a["a"]):
+                            continue
                         overlap = len(words & content_words(a["q"] + " " + a["a"]))
                         if overlap >= need:
                             found.append((overlap, m.get("time", 0), c["id"], c["title"], a["q"], a["a"]))
@@ -276,69 +314,94 @@ class Chat:
                 fixed = re.sub(r"^(fixed|text)\s*:\s*", "", fixed, flags=re.I)
                 if not fixed or not only_fixed(msg["you"], fixed):
                     fixed = msg["you"]                         # the safety check: keep what you typed
-                msg["fixed"] = fixed
             # 2. split it into questions
             questions, extra = split_questions(fixed)
-            msg["skipped"] = extra
-            # 3 and 4. check the math, then answer each question
             with self.lock:
-                history = [m for m in chat["messages"] if m is not msg and m["answers"]][-3:]   # this chat: the last 3
+                msg["fixed"], msg["skipped"] = fixed, extra
+                # this chat's last 3 answered messages (not refusals: a small AI copies those)
+                history = [m for m in chat["messages"] if m is not msg and m["answers"]
+                           and not all(a.get("refused") or is_refusal(a["a"]) for a in m["answers"])][-3:]
+            if self.stop_asked:
+                with self.lock:
+                    msg["stopped"] = True
+                return
+            # 3 and 4. check the math, then answer each question
             for q in questions:
+                if self.stop_asked:
+                    break
                 self._set("answering")
                 found = mathengine.find_problem(q)                       # 3. the math engine works out any math exactly
-                system = ANSWER_SYSTEM
                 engine = tutor = None
                 examples = []
+                math_note = ""
                 if found:
                     kind, what, answer = found
                     engine = {"kind": kind, "what": what, "answer": answer, "text": describe(kind, what, answer),
                               "steps": mathengine.steps(kind, what)}
-                    system += "\nA math engine worked this out exactly: %s. Use this answer, and explain the steps simply." % engine["text"]
+                    math_note = "\nA math engine worked this out exactly: %s. Use this answer, and explain the steps simply." % engine["text"]
                     if engine["steps"]:
-                        system += "\nThe steps: " + " ".join("%d) %s." % (i + 1, st.rstrip(".")) for i, st in enumerate(engine["steps"]))
+                        math_note += "\nThe steps: " + " ".join("%d) %s." % (i + 1, st.rstrip(".")) for i, st in enumerate(engine["steps"]))
                     tutor = self.tutor(kind, what) if self.tutor else None   # ...and your trained math AI has a go too
                 elif re.search(r"\d", q):                                # a word problem: use checked practice problems
                     examples = self._examples(q)
-                    if examples:
-                        system += "\nHere are similar problems that were solved and checked:\n" + "\n".join(
-                            "PROBLEM: %s MATH: %s ANSWER: %s" % (e["problem"], e["math"], e["answer"]) for e in examples)
+                system = ANSWER_SYSTEM + math_note
+                if examples:
+                    system += "\nHere are similar problems that were solved and checked:\n" + "\n".join(
+                        "PROBLEM: %s MATH: %s ANSWER: %s" % (e["problem"], e["math"], e["answer"]) for e in examples)
                 memories = self._memories(q, chat)                     # related things from your other chats
                 if memories:
                     system += "\nFrom the student's other chats (use only if it helps):\n" + "\n".join(
-                        '- In the chat "%s", they asked: %s You answered: %s' % (t, mq, ma[:220]) for _, _, _, t, mq, ma in memories)
+                        '- In the chat "%s", they asked: %s You answered: %s' % (t, mq, ma[:200]) for _, _, _, t, mq, ma in memories)
                 convo = [{"role": "system", "content": system}]
                 for m in history:
-                    convo.append({"role": "user", "content": m["fixed"] or m["you"]})
-                    convo.append({"role": "assistant", "content": " ".join(a["a"] for a in m["answers"])[:600]})
+                    convo.append({"role": "user", "content": (m["fixed"] or m["you"])[:300]})
+                    convo.append({"role": "assistant", "content": " ".join(a["a"] for a in m["answers"])[:400]})
+                with self.lock:
+                    earlier = [(a["q"], a["a"]) for a in msg["answers"] if a["a"]]   # questions answered earlier in this message
+                for eq, ea in earlier:
+                    convo += [{"role": "user", "content": eq}, {"role": "assistant", "content": ea[:400]}]
                 convo.append({"role": "user", "content": q})
                 entry = {"q": q, "a": "", "engine": engine, "tutor": tutor, "examples": len(examples), "writing": True,
                          "memories": list({cid: {"chat": cid, "title": t} for _, _, cid, t, _, _ in memories}.values())}
                 with self.lock:
                     msg["answers"].append(entry)
-                self._set("writing")
-
-                def add(piece):                                        # live typing: each piece as it's written
+                stopped = self._write(entry, convo, 0.85 if again else 0.4)
+                if not stopped and is_refusal(entry["a"]):
+                    # small models sometimes refuse harmless questions: try once more, simply, without the extras
                     with self.lock:
-                        entry["a"] += piece
-                stopped = llm.chat_stream(convo, add, stop=lambda: self.stop_asked, max_tokens=260,
-                                          temperature=0.85 if again else 0.4)
+                        entry["a"], entry["writing"], entry["retried"] = "", True, True
+                    simple = [{"role": "system", "content": RETRY_SYSTEM + math_note}, {"role": "user", "content": q}]
+                    stopped = self._write(entry, simple, 0.7)
+                    if not stopped and is_refusal(entry["a"]):
+                        with self.lock:
+                            entry["refused"] = True
                 with self.lock:
-                    entry["a"] = entry["a"].strip()
-                    entry["writing"] = False
-                    entry["stopped"] = stopped
                     chat["updated"] = time.time()
                     self._save(chat)
                 if stopped:
                     break
-            # 5. a title for a new chat
-            if not chat.get("titled") and len(chat["messages"]) == 1 and questions and not self.stop_asked:
+            # 5. a title for a new chat (after its first answered message)
+            answered = [m for m in chat["messages"] if m["answers"]]
+            if not chat.get("titled") and answered == [msg] and questions and not self.stop_asked:
                 self._set("titling")
                 title = llm.ask(TITLE_PROMPT.format(question=questions[0]), max_tokens=16, temperature=0.3)
                 with self.lock:
                     if not chat.get("titled"):                         # (unless you renamed it in the meantime)
                         chat["title"], chat["titled"] = clean_title(title, fixed), True
         except Exception as e:
-            msg["error"] = "the model took too long to answer" if "timed out" in str(e) else str(e)
+            why = str(e)
+            if "timed out" in why:
+                why = "the model took too long to answer"
+            elif "HTTP Error 400" in why:
+                why = "the model couldn't take a message that long. Try a shorter question, or start a new chat."
+            elif "refused" in why.lower() or "Errno 111" in why:
+                why = ("the AI model isn't running. Wait a minute if the Pi just started, or restart it on the Pi with: "
+                       "sudo systemctl restart llamaserver")
+            elif isinstance(e, (ConnectionError, http.client.HTTPException)):
+                why = ("the model stopped in the middle of answering (on a Pi this usually means it ran out of memory). "
+                       "Press 🔄 Try again")
+            with self.lock:
+                msg["error"] = why
         finally:
             with self.lock:
                 self.busy, self.busy_chat = False, None
@@ -346,3 +409,20 @@ class Chat:
                 if chat["id"] in self.chats:
                     self._save(chat)
             self.bot.hold_until = time.time() + 20             # carry on practicing soon, unless you ask again
+
+    def _write(self, entry, convo, temperature):
+        """Live typing: stream the answer into entry. Returns True if you pressed Stop."""
+        self._set("writing")
+
+        def add(piece):
+            with self.lock:
+                entry["a"] += piece
+        stopped = False
+        try:
+            stopped = self.bot.llm.chat_stream(convo, add, stop=lambda: self.stop_asked, max_tokens=260, temperature=temperature)
+        finally:                                    # even if the model crashes halfway, it's not "writing" any more
+            with self.lock:
+                entry["a"] = entry["a"].strip()
+                entry["writing"] = False
+                entry["stopped"] = stopped
+        return stopped

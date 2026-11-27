@@ -180,3 +180,64 @@ With the strict checker keeping bad examples out, the big gap (about 23% vs 46%)
 - **Exported chats said "null"** when the math AI gave no answer. Now they say "no answer".
 
 **Tested:** the steps for 12 kinds of equations, derivatives and integrals, and, with a pretend model that streams slowly: text appearing while it's written, stopping halfway (the model saw the hang-up), Try again giving a new answer, and Export downloading the chat with its steps.
+
+### 27. Decimals, and two wrong answers in the math engine
+**Goal:** Make the Chat tab handle decimals, like 2.5 + 1.75 or 0.5x + 1.2 = 3.
+**Problems found while testing:**
+- **Decimal answers came out as fractions.** The engine keeps every number as an exact fraction (so 0.1 + 0.2 is exactly 0.3, not 0.30000000000000004 like a normal computer gets), but then it *showed* them as fractions too: 10 ÷ 4 = 5/2. Now any answer that ends is shown as a decimal (2.5), and answers that never end show both: 10 ÷ 3 = 10/3 (about 3.33333).
+- **"-5 + 3" said 8!** The part that finds the math in your sentence skipped the minus at the start, so it worked out 5 + 3. Now a minus at the start counts, unless it's part of something before it (like the "-" in "7-3").
+- **"2^10" got no answer.** To keep x-powers small (x^8 at most), the engine refused *any* power above 8, even plain numbers. Now numbers can go up to a power of 64, and x-powers still stop at 8.
+- **New:** percentages ("15% of 80" = 12, with steps) and square roots ("square root of 6.25" = 2.5, or "about 1.41421" for √2).
+
+**Tested:** 30 kinds of question, including -5 + 3 = -2, 2^10 = 1024, 10/4 = 2.5, 0.1 + 0.2 = 0.3, 0.5x + 1.2 = 3 (x = 3.6), 15% of 80 = 12, √6.25 = 2.5, and 5 ÷ 0 ("you can't divide by 0").
+
+### 28. "I'm sorry, but I can't assist with that."
+**Problem:** The chat AI sometimes refused normal questions, like how to stop a stuck program ("kill" a process).
+**Causes:**
+- Small AIs are easily confused into refusing, especially with long instructions (ours had the memories, the math engine's answer and the examples all in one big message).
+- Worse, **one refusal caused more.** The refusal was saved like any other answer, so it was shown to the AI as an earlier message and as a memory. The AI saw "I can't help with that" and copied it. It could even become the chat's title.
+
+**Fix:**
+- If the answer is a refusal, it tries once more with short, simple instructions that say "only refuse if it's truly dangerous or harmful".
+- Refusals are never used as earlier messages, memories or titles.
+- If it still refuses, the answer is marked, and it tells you to try asking a different way.
+
+A question that really is dangerous still gets refused: the retry doesn't change that.
+**Tested:** with a pretend model that refuses "kill" questions with the normal instructions (it answered on the retry), and one that always refuses (marked, and not used as the title).
+
+### 29. A bug hunt in the Chat tab
+**Goal:** Find bugs before they find you. We went through the chat code line by line, then tested every odd thing we could think of.
+**Bugs found and fixed:**
+1. **Restarting the Pi in the middle of an answer** left it "writing" forever, and lost the part it had written. Now the Pi saves the chats when it shuts down, and when it starts, any half-written answer is marked "cut off", with 🔄 Try again.
+2. **A restart before it answered at all** left your message with no answer and no explanation. Now it says so.
+3. **Reading a chat while it was being written** could crash the page now and then, because the answer changed while it was being turned into text for the web page. Now the page gets a copy.
+4. **Stop didn't work while it was fixing your spelling.** Now it checks for Stop between every step.
+5. **The second question in a message didn't know about the first**, so "What's a rover? How fast is it?" didn't know what "it" was. Now each question sees the earlier ones from the same message.
+6. **A chat with an error never got a title** (it only titled chats whose first message worked). Now it's titled after the first answer that works.
+7. **An empty message** gave a confusing error. Now it says "Type a question first."
+8. **No way to retry after an error.** Errors now have 🔄 Try again, and clear messages (like "the model took too long").
+9. **The page could send the same message twice** if you pressed Enter twice quickly, and **lost what you typed** if sending failed. Both are fixed.
+10. **An old reply could overwrite a newer one** when you switched chats quickly (slow replies arriving out of order). Now old replies are ignored.
+11. **If the model crashed halfway through an answer** (on a Pi, usually from running out of memory), the answer kept a blinking "writing" cursor until the next restart, because the error skipped the line that turns "writing" off. Now that line always runs, the part it wrote is kept, and it says what happened. If the model isn't running at all, it tells you the command to restart it.
+
+**Tested:** all of these again at the end with a pretend model server (14 of 14 passed), plus a pretend model that crashes halfway through an answer and one that isn't running (both passed).
+
+### 30. Decimal practice for the chatbot
+**Goal:** Make the chatbot practice decimals too, since that's where the Chat tab's math training comes from.
+**How:** a 4th kind of question, **decimals**, for the experiments: word problems with money and measurements, checked exactly by the math engine. A question is thrown away if its answer needs more than 3 decimal places (like 10 ÷ 3), because then "right" and "wrong" depend on rounding.
+**Problem found:** the part that cleans up the AI's math turned `.5 * 4` into `5 * 4`, because it removed dots from both ends. Now it only removes a full stop at the end, and `.5` becomes `0.5`.
+
+### 31. Course 3: decimals and harder math
+**Goal:** Make the math AI learn decimals and more advanced math.
+**How:** a third course, with decimals, quadratic equations (x² − 5x + 6 = 0), integrals and longer derivatives. See [2. The math AI](02-math-ai.md).
+**Problems found:**
+- **Course 3 can't use the same brain as course 2.** It needs 3 new symbols (a decimal point, ∫ and a comma), and a brain can only read the symbols it was built with. So course 3 has its own brain, and your course 2 brain is kept exactly as it is.
+- **The "I've finished" mark was a full stop,** which in course 3 is a decimal point. "4." would look finished when it should be "4.2". Course 3 uses `#` instead.
+- **It got the *easy* decimals wrong.** On the first try, the numbers were written the normal way (`5+2.3=`, `31.2+13.1=`). After 3,500 rounds it was stuck around 80%, and its weak spots showed something strange: **97%** right on questions with a carry, but only **69%** on questions *without* one, which should be easier! The reason: every question with a carry had two decimals (`31.9+13.1`), so its digits were always in the same places. The ones without a carry came in lots of shapes (`5+23`, `5+2.3`, `31.2+13.1`), so the tenths digit moved around and the tiny brain couldn't tell which digits to add together. **Fix:** line the numbers up like you do on paper, with zeros: `05.0+02.3=`. Course 1 does the same thing (`047+038`). The page still shows "5 + 2.3".
+- **Two levels used the same names for their weak spots.** Adding and multiplying decimals both had "1 carry" and "2 carries", so when it reviewed adding (which it was good at) during the multiplying level, those scores got mixed into multiplying's. That hid how weak it really was at multiplying, so it practiced it less. Now multiplying's are called "times, 1 carry" and so on, and a check makes sure no two levels share a name.
+- **Quadratic answers could be written two ways** (2,3 or 3,2), and only one would be marked right. Now the smaller answer always comes first.
+- **Instead of copying course 2's code,** both courses now share the same code, with a list of settings for each one (its symbols, levels and files). Less code means fewer places for bugs.
+- **Old bug found:** `d/dx x` was shown as "d/dx, x", because the display thought anything ending in "x" was an equation. Found by checking every question the courses make.
+
+**Tested:** 20,000 questions from every level of both courses, checked against the math engine (none wrong), typing each kind of question back in, and the course 2 brain we trained before still loading and scoring 97%.
+
