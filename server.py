@@ -88,6 +88,7 @@ class Lab:
             r = read_json(path)
             if r and r.get("status") == "running":
                 r["status"] = "stopped"
+                r["why"] = "the program restarted (for example after an update or a power cut)"
                 write_json(path, r)
 
     def save_settings(self):
@@ -125,7 +126,7 @@ class Lab:
     def start_collapse(self, body):
         if self.collapse_proc is not None and self.collapse_proc.is_alive():
             raise ValueError("An experiment is already running.")
-        settings = {"rounds": max(2, min(10, int(body.get("rounds", 6)))), "keep_real": bool(body.get("keep_real", False)),
+        settings = {"rounds": max(2, min(60, int(body.get("rounds", 6)))), "keep_real": bool(body.get("keep_real", False)),
                     "temperature": max(0.3, min(1.5, float(body.get("temperature", 0.9)))), "steps": 1500}
         path = os.path.join(RUNS, time.strftime("run-%Y%m%d-%H%M%S") + ".json")
         self.collapse_proc = multiprocessing.get_context("spawn").Process(target=collapse_job, args=(settings, path), daemon=True)   # a fresh, separate process
@@ -134,13 +135,14 @@ class Lab:
         for old in sorted(glob.glob(os.path.join(RUNS, "*.json")))[:-8]:   # keep the last 8 runs
             os.remove(old)
 
-    def stop_collapse(self):
+    def stop_collapse(self, why="you pressed Stop"):
         if self.collapse_proc is not None and self.collapse_proc.is_alive():
             self.collapse_proc.terminate()
             self.collapse_proc.join(5)
             r = read_json(self.collapse_path)
             if r:
                 r["status"] = "stopped"
+                r["why"] = why
                 write_json(self.collapse_path, r)
 
     # ------------------------------------------------------------ part 2
@@ -256,7 +258,7 @@ def main():
     def stop(*_):
         def finish():
             lab.math.save()
-            lab.stop_collapse()
+            lab.stop_collapse("the program restarted (for example after an update)")
             print("saved. bye!", flush=True)
             os._exit(0)
         threading.Thread(target=finish, daemon=True).start()

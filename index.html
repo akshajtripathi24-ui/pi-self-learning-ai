@@ -165,7 +165,7 @@ footer{text-align:center;color:var(--muted);font-size:12px;padding:20px}footer a
     <h2>🔬 What happens when an AI learns from its own writing?</h2>
     <p class="muted" style="margin-top:0"><b>Round 0:</b> a new tiny GPT learns to write from 100 real space and robot facts. <b>Round 1:</b> another new one learns <b>only</b> from sentences round 0 wrote. <b>Round 2</b> learns only from round 1… Nothing checks the sentences. Watch what happens!</p>
     <div class="row">
-      <div><label for="crounds">Rounds</label><input type="number" id="crounds" min="2" max="10" value="6"></div>
+      <div><label for="crounds">Rounds</label><input type="number" id="crounds" min="2" max="60" value="6"></div>
       <div><label for="ctemp">Creativity (temperature)</label><input type="number" id="ctemp" min="0.3" max="1.5" step="0.1" value="0.9"></div>
     </div>
     <div class="check"><input type="checkbox" id="ckeep"><label for="ckeep" style="margin:0">The fix: keep the real facts in every round's lessons</label></div>
@@ -341,7 +341,8 @@ async function loadCol() {
   $('cprog').style.width = run ? Math.round(run.progress * 100) + '%' : '0%';
   $('cstatus').textContent = !run ? 'Each round takes a few minutes on a Pi. You can close the page; it keeps going.' :
     run.status === 'running' ? `Running: round ${Math.min(run.settings.rounds, run.results.length + 1)} of ${run.settings.rounds}… (${Math.round(run.progress * 100)}%)` :
-    run.status === 'done' ? `Finished ${run.settings.rounds} rounds (${run.settings.keep_real ? 'with the real facts kept' : 'only its own writing'}).` : 'Stopped.';
+    run.status === 'done' ? `Finished ${run.settings.rounds} rounds (${run.settings.keep_real ? 'with the real facts kept' : 'only its own writing'}).` :
+    `Stopped after ${run.results.length} of ${run.settings.rounds} rounds` + (run.why ? `, because ${run.why}.` : '.') + ' Press ▶ to start a new run.';
   $('crounds-out').innerHTML = run ? run.results.slice().reverse().map(r => `<div class="round"><h3>Round ${r.round} <span class="muted">· learned from ${esc(r.learned_from)}</span></h3>
     <div class="muted">Different words: <b style="color:var(--text)">${r.different_words}</b> · different sentences: <b style="color:var(--text)">${r.different_sentences}%</b> · real words: <b style="color:var(--text)">${r.real_words}%</b> · surprise at the real facts: <b style="color:var(--text)">${r.surprise}</b></div>
     <ul>${r.samples.slice(0, 6).map(s => `<li>${esc(s)}</li>`).join('')}</ul></div>`).join('') : '';
@@ -352,6 +353,9 @@ async function loadCol() {
   lineChart($('cchart2'), runs.map((r, i) => ({name: name(r), color: colors[i], points: r.results.map(x => [x.round, x.surprise])})), {xName: 'Round', xMin: 0, xTicks: 5, digits: 2, label: 'Surprise at the real facts per round', empty: 'Start an experiment to see the chart.'});
 }
 $('cstart').onclick = async () => {
+  const n = +$('crounds').value;
+  if (n > 60 || n < 2) { $('cstatus').textContent = 'Pick between 2 and 60 rounds.'; return; }
+  if (n > 20 && !confirm(`${n} rounds will take a few hours on a Pi. Start it?`)) return;
   try { await post('/api/collapse/start', {rounds: +$('crounds').value, temperature: +$('ctemp').value, keep_real: $('ckeep').checked}); loadCol(); }
   catch (e) { $('cstatus').textContent = '❌ ' + e.message; }
 };

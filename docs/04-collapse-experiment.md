@@ -27,7 +27,7 @@ Your results will be a bit different every time, because the AI uses random numb
 
 ## Things to try
 - **Creativity (temperature):** at 0.5 it plays it safe and repeats itself sooner. At 1.2 it takes more risks and makes up stranger words. Which collapses faster?
-- **More rounds:** what does round 10 look like?
+- **More rounds:** what does round 30, or even 60, look like? (Up to 60 rounds. That takes a few hours on a Pi, so start it before bed.)
 
 ## How long it takes
 Each round trains a new AI from scratch: about 35 seconds on a fast computer, so roughly 3–6 minutes on a Pi 4. Six rounds take about half an hour. It runs in the background, so you can close the page.

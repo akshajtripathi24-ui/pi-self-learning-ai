@@ -104,3 +104,8 @@ What happened when it was installed on a real Raspberry Pi 4 (32-bit Pi OS, with
 **Plan:** Result 17 gave two possible reasons, so the chatbot now has experiment settings to test them one at a time: a **strict checker** that keeps bad questions out of the notebook, the number of **notebook pages** shown (1 to 3), and a **bigger model** (Qwen 2.5 1.5B, switched with `bash setup-llamacpp.sh 1.5b`). Every experiment is saved in a table on the Chatbot tab, so they can be compared. The first experiment (27% vs 45%) was kept as experiment 1.
 **Tested:** with a pretend model server: the old result was saved as experiment 1 with the model that produced it, the strict checker threw away "no question" and "numbers not in the question" problems, and switching the model started a new experiment by itself. The bigger model's download hasn't been tested yet (the computer used to build this can't download models).
 **Results:** *will be added here after running them on the Pi.*
+
+### 19. The collapse experiment said "Stopped." with no reason
+**Problem:** The collapse experiment page just said "Stopped.", with no rounds done. Also, 60 rounds had been typed in, but the most it allowed was 10, and it cut it down without saying so.
+**Cause:** Updating the Pi (`git pull` and restarting the program) stops a collapse run that's in progress, but the page didn't say why it stopped.
+**Fix:** The page now says how many rounds were done and why it stopped ("because the program restarted" or "because you pressed Stop"). It allows up to 60 rounds, refuses numbers outside 2 to 60 with a message, and asks before starting a run longer than 20 rounds, since that takes a few hours.
