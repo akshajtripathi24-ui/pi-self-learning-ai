@@ -156,3 +156,13 @@ With the strict checker keeping bad examples out, the big gap (about 23% vs 46%)
 - **Algebra questions looked messy** on the Math AI tab ("x-2 = 2, x"). They now read "x − 2 = 2, x = 4".
 
 **Tested:** with a pretend model server: course 2 training and its feed, asking both courses, algebra and calculus practice (checked by the engine), and the chat using the engine, the math AI and checked examples.
+
+### 25. Saved chats, titles and memory across chats
+**Goal:** Make the Chat tab work like other chatbots: separate chats you can go back to, with titles, and memory.
+**How:** each chat is saved as its own file in `data/chats/`. After the first question, the AI writes a title. When answering, it uses the last 3 questions and answers in the same chat, plus up to 2 related answers from your other chats, found by looking for shared important words (like "rover" or "jupiter", not "what" or "about").
+**Problems found while testing:**
+- **The AI's titles came out messy,** like `Title: "Jupiter facts"`. They're now cleaned up, and if a title is too long or looks like an answer, the first words of your question are used instead.
+- **"What did I ask about the rover before?"** shares only 1 important word ("rover") with the old chat, and the search needed 2. Now, if you say "before", "earlier", "remember" or "already asked", 1 shared word is enough.
+- **The same chat was linked twice** when 2 memories came from it. Now each chat is linked once.
+
+**Tested:** with a pretend model server: new chats, AI titles, a follow-up seeing the earlier message, memory found across chats, rename, delete, sending while it's still busy (refused), and chats still there after a restart.

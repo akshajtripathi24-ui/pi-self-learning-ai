@@ -71,6 +71,17 @@ footer{text-align:center;color:var(--muted);font-size:12px;padding:20px}footer a
 .bubble.ai{align-self:flex-start;background:#111a2e;border:1px solid var(--line)}
 .bubble .fix{font-size:12px;color:var(--muted);margin-top:6px;white-space:normal}
 .chatbox{display:flex;gap:8px;margin-top:6px;align-items:stretch}
+.chatwrap{display:grid;grid-template-columns:240px minmax(0,1fr);gap:16px;margin-top:8px}
+.chatside{border-right:1px solid var(--line);padding-right:14px;min-width:0}
+#chatlist{max-height:62vh;overflow-y:auto}
+.chatitem{display:block;width:100%;text-align:left;background:transparent;color:var(--text);border:1px solid transparent;border-radius:8px;padding:8px 10px;margin-bottom:4px;font-weight:600;font-size:14px;cursor:pointer}
+.chatitem:hover{background:#111a2e}
+.chatitem.on{background:#0b2530;border-color:#155e75;color:var(--accent)}
+.chatitem .when{display:block;font-size:11px;color:var(--muted);font-weight:400;margin-top:2px}
+.chathead{display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--line);padding-bottom:8px;margin-bottom:8px;min-width:0}
+.chathead b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bubble .fix a{color:var(--accent);cursor:pointer}
+@media (max-width:760px){.chatwrap{grid-template-columns:1fr}.chatside{border-right:0;padding-right:0;border-bottom:1px solid var(--line);padding-bottom:10px}#chatlist{max-height:180px}}
 .chatbox textarea{flex:1;resize:vertical;min-height:46px;padding:9px 11px;border-radius:10px;border:1px solid var(--line);background:#0b1222;color:var(--text);font:inherit;font-size:15px}
 </style>
 </head>
@@ -177,11 +188,20 @@ footer{text-align:center;color:var(--muted);font-size:12px;padding:20px}footer a
 <main id="page-chat" class="hide">
   <section class="card full">
     <h2>🗨️ Talk to the AI</h2>
-    <p class="muted" style="margin-top:0">Ask anything, even with spelling mistakes. It fixes your message first ✏️, answers each question separately if you ask more than one, and a math engine 🧮 works out any arithmetic, algebra (solve for x) or calculus (derivatives, integrals) exactly, so it can't get the math wrong. Your trained math AI 🧠 has a go too, and checked practice problems 📒 help with word problems. It's the same small AI as the Chatbot tab (<b id="chatmodel">not connected yet</b>), so it can still be wrong about facts. The Chatbot practice pauses while you chat.</p>
-    <div id="chatlog" class="chatlog"></div>
-    <p class="muted" id="chatstage" style="min-height:20px;margin:8px 0 0"></p>
-    <div class="chatbox"><textarea id="chatin" rows="2" placeholder="Ask anything… (Enter to send, Shift + Enter for a new line)"></textarea><button id="chatsend">Send</button></div>
-    <div class="bar"><button class="ghost small" id="chatclear">🧹 Clear the chat</button></div>
+    <p class="muted" style="margin-top:0">Ask anything, even with spelling mistakes. ✏️ It fixes your message, 🧮 a math engine works out any arithmetic, algebra or calculus exactly, 🧠 your trained math AI has a go too, 📒 checked practice problems help with word problems, and 🔗 it remembers related things from your other chats. Every chat is saved on the Pi. It's the same small AI as the Chatbot tab (<b id="chatmodel">not connected yet</b>), so it can still be wrong about facts. <a href="https://github.com/akshajtripathi24-ui/pi-self-learning-ai/blob/main/docs/07-chat.md" target="_blank" rel="noopener" style="color:var(--accent)">How it works</a></p>
+    <div class="chatwrap">
+      <aside class="chatside">
+        <button id="chatnew" style="width:100%">➕ New chat</button>
+        <input type="text" id="chatsearch" placeholder="🔍 Search your chats" aria-label="Search your chats" style="width:100%;margin:10px 0">
+        <div id="chatlist"></div>
+      </aside>
+      <div class="chatmain">
+        <div class="chathead"><b id="chattitle">New chat</b><span style="flex:1"></span><button class="ghost small" id="chatrename">✏️ Rename</button><button class="ghost small" id="chatdelete">🗑️ Delete</button></div>
+        <div id="chatlog" class="chatlog"></div>
+        <p class="muted" id="chatstage" style="min-height:20px;margin:8px 0 0"></p>
+        <div class="chatbox"><textarea id="chatin" rows="2" placeholder="Ask anything… (Enter to send, Shift + Enter for a new line)"></textarea><button id="chatsend">Send</button></div>
+      </div>
+    </div>
   </section>
 </main>
 
@@ -408,13 +428,30 @@ $('cstart').onclick = async () => {
 $('cstop').onclick = async () => { await post('/api/collapse/stop'); loadCol(); };
 
 // ---------------------------------------------------------------- part 4: talk to the AI
-let chat = null, chatHtml = '';
+let chat = null, chatHtml = '', chatListHtml = '';
+let chatId = store.get('chat') || null;        // the chat you're looking at (null = a new one, saved when you send)
 const same = (a, b) => a.toLowerCase().replace(/[^a-z0-9]/g, '') === b.toLowerCase().replace(/[^a-z0-9]/g, '');
+const when = t => { const d = new Date(t * 1000), now = new Date();
+  return d.toDateString() === now.toDateString() ? 'Today ' + d.toLocaleTimeString([], {hour: 'numeric', minute: '2-digit'}) : d.toLocaleDateString([], {month: 'short', day: 'numeric'}); };
+function openChat(id) { chatId = id; store.set('chat', id || ''); chatHtml = ''; loadChat(); }
 async function loadChat() {
-  try { chat = await api('/api/chat'); } catch (e) { return; }
+  try { chat = await api('/api/chat' + (chatId ? '?id=' + encodeURIComponent(chatId) : '')); } catch (e) { return; }
   const c = chat;
+  if (chatId && !c.chat) { chatId = null; store.set('chat', ''); }          // it was deleted
   $('chatmodel').textContent = c.model || 'not connected yet';
-  const html = c.messages.map(m => {
+  const q = $('chatsearch').value.trim().toLowerCase();
+  const list = c.chats.filter(x => !q || x.title.toLowerCase().includes(q));
+  const listHtml = (c.chats.length ? '' : '<p class="muted">Your chats will show up here.</p>') +
+    list.map(x => `<button class="chatitem ${x.id === chatId ? 'on' : ''}" data-chat="${esc(x.id)}">${esc(x.title)}<span class="when">${when(x.updated)} · ${x.count} message${x.count === 1 ? '' : 's'}${c.busy && c.busy_chat === x.id ? ' · ✍️' : ''}</span></button>`).join('') +
+    (q && !list.length ? '<p class="muted">No chats match.</p>' : '');
+  if (listHtml !== chatListHtml) {
+    $('chatlist').innerHTML = chatListHtml = listHtml;
+    document.querySelectorAll('#chatlist .chatitem').forEach(b => b.onclick = () => openChat(b.dataset.chat || null));
+  }
+  $('chattitle').textContent = c.chat ? c.chat.title : 'New chat';
+  $('chatrename').disabled = $('chatdelete').disabled = !c.chat;
+  const msgs = c.chat ? c.chat.messages : [];
+  const html = msgs.map(m => {
     let h = `<div class="bubble you">${esc(m.you)}${m.fixed && !same(m.fixed, m.you) ? `<div class="fix">✏️ I read this as: ${esc(m.fixed)}</div>` : ''}</div>`;
     const many = m.answers.length > 1 || m.skipped;
     h += m.answers.map((a, i) => {
@@ -422,28 +459,44 @@ async function loadChat() {
       if (a.engine) notes += `<div class="fix">🧮 The math engine worked it out exactly: ${esc(a.engine.text)}</div>`;
       if (a.tutor) notes += `<div class="fix">🧠 Your tiny math AI (course ${a.tutor.course}, trained on this Pi) says: <b>${esc(a.tutor.answer == null ? '?' : a.tutor.answer)}</b> ${a.tutor.ok ? '✅' : `❌ (it's still learning: ${a.tutor.mastered ? 'mastered the course, but not this one' : 'level ' + a.tutor.level + ' of ' + a.tutor.levels})`}</div>`;
       if (a.examples) notes += `<div class="fix">📒 Used ${a.examples} checked example${a.examples > 1 ? 's' : ''} from the Chatbot's practice</div>`;
-      if (a.math) notes += `<div class="fix">🧮 Python checked the math: ${esc(a.math[0].replace(/\*/g, '×'))} = ${esc(a.math[1])}</div>`;
+      if (a.memories && a.memories.length) notes += `<div class="fix">🔗 Remembered from: ${a.memories.map(x => `<a data-open="${esc(x.chat)}">${esc(x.title)}</a>`).join(', ')}</div>`;
       return `<div class="bubble ai">${many ? `<b>${i + 1}. ${esc(a.q)}</b>\n` : ''}${esc(a.a)}${notes}</div>`;
     }).join('');
     if (m.skipped && m.answers.length === 3) h += `<div class="bubble ai">I answered the first 3 questions. Ask the other ${m.skipped} in a new message!</div>`;
     if (m.error) h += `<div class="bubble ai" style="border-color:var(--bad)">⚠️ ${esc(m.error)}</div>`;
     return h;
   }).join('') || '<p class="muted">Ask your first question below. Try one with mistakes, like: wat is the bigest planet and how far is it</p>';
-  if (html !== chatHtml) { $('chatlog').innerHTML = html; $('chatlog').scrollTop = $('chatlog').scrollHeight; chatHtml = html; }
+  if (html !== chatHtml) {
+    $('chatlog').innerHTML = chatHtml = html; $('chatlog').scrollTop = $('chatlog').scrollHeight;
+    document.querySelectorAll('#chatlog [data-open]').forEach(a => a.onclick = () => openChat(a.dataset.open));
+  }
   const speed = c.speed ? ` · ${c.speed} tokens a second` : '';
-  $('chatstage').textContent = c.busy ? (c.stage === 'fixing' ? '✏️ Fixing the spelling and grammar… ' : c.stage === 'answering' ? '🤔 Thinking… ' : '⏳ Getting ready… ') + (c.stage_seconds || 0) + ' s' + speed : '';
+  const here = !c.busy_chat || c.busy_chat === chatId;
+  $('chatstage').textContent = !c.busy ? '' : !here ? '⏳ It\'s answering in another chat. Wait a moment…' :
+    (c.stage === 'fixing' ? '✏️ Fixing the spelling and grammar… ' : c.stage === 'answering' ? '🤔 Thinking… ' : c.stage === 'titling' ? '🏷️ Naming this chat… ' : '⏳ Getting ready… ') + (c.stage_seconds || 0) + ' s' + speed;
   $('chatsend').disabled = c.busy;
 }
 async function sendChat() {
   const text = $('chatin').value.trim();
   if (!text || (chat && chat.busy)) return;
   $('chatin').value = '';
-  try { await post('/api/chat/send', {text}); } catch (e) { $('chatstage').textContent = '⚠️ ' + e.message; }
+  try { const r = await post('/api/chat/send', {text, chat: chatId}); if (r.chat) { chatId = r.chat.id; store.set('chat', chatId); } }
+  catch (e) { $('chatstage').textContent = '⚠️ ' + e.message; }
   loadChat();
 }
 $('chatsend').onclick = sendChat;
 $('chatin').addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChat(); } });
-$('chatclear').onclick = async () => { await post('/api/chat/clear'); chatHtml = ''; loadChat(); };
+$('chatnew').onclick = () => { openChat(null); $('chatin').focus(); };
+$('chatsearch').oninput = () => { chatListHtml = ''; loadChat(); };
+$('chatrename').onclick = async () => {
+  if (!chat || !chat.chat) return;
+  const t = prompt('New name for this chat:', chat.chat.title);
+  if (t && t.trim()) { await post('/api/chat/rename', {chat: chatId, title: t.trim()}); loadChat(); }
+};
+$('chatdelete').onclick = async () => {
+  if (!chat || !chat.chat || !confirm(`Delete the chat "${chat.chat.title}"? This can't be undone.`)) return;
+  try { await post('/api/chat/delete', {chat: chatId}); openChat(null); } catch (e) { alert(e.message); }
+};
 
 // ---------------------------------------------------------------- start
 function refresh() { ({math: loadMath, bot: loadBot, col: loadCol, chat: loadChat})[tab](); }

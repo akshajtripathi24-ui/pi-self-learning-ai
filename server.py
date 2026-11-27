@@ -86,7 +86,7 @@ class Lab:
         self.math.paused = self.math2.paused = cfg["math_paused"]
         self.bot = Chatbot(DATA, cfg)
         self.bot.running = cfg["chatbot_running"]           # keep practicing after the Pi restarts
-        self.chat = Chat(self.bot, tutor=self.math_ai_try)    # part 4: talk to the AI
+        self.chat = Chat(self.bot, os.path.join(DATA, "chats"), tutor=self.math_ai_try)   # part 4: talk to the AI
         self.collapse_proc = None
         self.collapse_path = None
         for path in glob.glob(os.path.join(RUNS, "*.json")):          # runs that were cut off by a restart
@@ -273,7 +273,8 @@ class Handler(BaseHTTPRequestHandler):
             if path == "/api/chatbot":
                 return self._send(200, lab.chatbot_status())
             if path == "/api/chat":
-                return self._send(200, lab.chat.status())
+                cid = parse_qs(urlparse(self.path).query).get("id", [""])[0]
+                return self._send(200, lab.chat.status(cid or None))
             return self._send(404, {"error": "not found"})
         except Exception as e:
             print("error on", path, e, flush=True)
@@ -323,12 +324,16 @@ class Handler(BaseHTTPRequestHandler):
                     lab.bot.connection = lab.bot.llm.check()
                 return self._send(200, lab.chatbot_status())
             if path == "/api/chat/send":
-                if not lab.chat.send(body.get("text", "")):
+                cid = lab.chat.send(body.get("text", ""), body.get("chat") or None)
+                if not cid:
                     return self._send(409, {"error": "It's still answering your last message."})
-                return self._send(200, lab.chat.status())
-            if path == "/api/chat/clear":
-                lab.chat.clear()
-                return self._send(200, lab.chat.status())
+                return self._send(200, lab.chat.status(cid))
+            if path == "/api/chat/rename":
+                return self._send(200, {"ok": lab.chat.rename(str(body.get("chat", "")), body.get("title", ""))})
+            if path == "/api/chat/delete":
+                if not lab.chat.delete(str(body.get("chat", ""))):
+                    return self._send(409, {"error": "Wait until it finishes answering in that chat."})
+                return self._send(200, {"ok": True})
             if path == "/api/chatbot/experiment":
                 pages = max(1, min(3, int(body.get("pages", 3))))
                 topics = [t for t in body.get("topics", []) if t in KINDS] or ["arithmetic"]
