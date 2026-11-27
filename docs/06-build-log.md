@@ -240,7 +240,7 @@ A question that really is dangerous still gets refused: the retry doesn't change
 - **Instead of copying course 2's code,** both courses now share the same code, with a list of settings for each one (its symbols, levels and files). Less code means fewer places for bugs.
 - **Old bug found:** `d/dx x` was shown as "d/dx, x", because the display thought anything ending in "x" was an equation. Found by checking every question the courses make.
 
-**Tested:** 20,000 questions from every level of both courses, checked against the math engine (none wrong), typing each kind of question back in, and the course 2 brain we trained before still loading and scoring 97%.
+**Tested:** 20,000 questions from every level of both courses, checked against the math engine (none wrong), typing each kind of question back in, and the course 2 brain we trained before still loading and scoring 97%. **Training test:** on a fast computer, course 3 mastered all 7 levels in about 29 minutes (11,800 rounds), then answered all 7 test questions right, including x² + 2x − 15 = 0 (x = −5 or 3) and ∫ 12x³ dx (3x⁴ + C).
 
 
 ### 32. Giant numbers, tiny numbers and (-1)^7

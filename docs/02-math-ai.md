@@ -76,7 +76,21 @@ After course 2, it moves on to **course 3** by itself (or pick **Course 3 now** 
 
 **Every answer was checked:** 20,000 questions from each level were made and checked against the math engine, and none were wrong.
 
-**How long it takes:** a test run on a fast computer is going now. Its results will be added here.
+**How long it takes:** in a test on a fast computer, it mastered **all 7 levels in about 29 minutes** (11,800 rounds, about 727,000 questions). The computer was also running other tests at the same time, so it would have been a bit faster on its own:
+
+| Level | Passed after |
+|---|---|
+| 1. Decimals: adding | 1,000 rounds |
+| 2. Decimals: subtracting | 1,800 rounds |
+| 3. Decimals: multiplying | 5,100 rounds (the hardest decimals level) |
+| 4. Quadratic equations | 6,400 rounds |
+| 5. Integrals | 6,500 rounds (only 100 more!) |
+| 6. Derivatives of three terms | 8,500 rounds |
+| 7. Mixed | mastered at 11,800 rounds |
+
+Each course 3 round takes longer than a course 2 round (its questions are longer), so on a Pi 4 expect **roughly 4 to 7 hours**: a good one to leave running overnight. After the test, it answered all 7 of these right: 2.5 + 1.7, 38.6 − 12.9, 4.5 × 6, x² − 5x + 6 = 0, x² + 2x − 15 = 0, ∫ 12x³ dx and d/dx 2x⁴ − 3x² + 5x.
+
+Interesting: quadratic equations only took 1,300 rounds, even though *you* need to factor them. With answers from −9 to 9 there are only 190 different quadratics, so it can learn every one of them. And integrals took just 100 rounds: there are only 45 different ones in this level (powers 0 to 4, and answers with a number from 1 to 9 in front), and the rule is one simple pattern (add 1 to the power, then divide by the new power).
 
 ## The trick: it writes answers backward
 Inside, it writes 47 + 38 = 85 as `047+038=5800.`: the answer is backward, ones digit first. That's how *you* add: you start with the ones, then carry to the tens. If it had to write the tens digit first, it would need to know about the carry before working out the ones! The web page shows the answer the normal way.
