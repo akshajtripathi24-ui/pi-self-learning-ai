@@ -84,3 +84,18 @@ What happened when it was installed on a real Raspberry Pi 4 (32-bit Pi OS, with
 **Problem:** With the new checker, most thrown-away questions were real mistakes: "the answer isn't a whole number" (like 9 robots ÷ 2). One question was worse. The AI wrote "A space telescope sends a message every 5 seconds. How many messages will it send in 3 minutes?" with the math `5 * 3`, so the checker worked out 15. The right answer is 3 minutes = 180 seconds, and 180 ÷ 5 = **36**.
 **Cause:** The checker can only check that the math *adds up*. It can't check that the math *matches the words*. A small model can write a sensible question and then the wrong math for it.
 **Fix:** The teacher is now asked to choose numbers that give a whole-number answer, so fewer rounds are wasted. The wrong-math problem has no easy fix. It's a real AI research problem, and the guide already warns about it ("checking the checker"). When you spot one in the feed, it's a good example of why AI answers still need a person to check them.
+
+### 17. The result: the notebook made it worse
+**What happened:** After the checker fix, the chatbot practiced for 134 rounds: 64 with the notebook and 64 without (the first few rounds don't count, because the notebook needs 3 pages first). Only 50 of 184 questions were thrown away (27%, down from 77% before the fix).
+
+| | Right answers |
+|---|---|
+| 📒 With the notebook | **27%** (17 of 64) |
+| Without the notebook | **45%** (29 of 64) |
+
+**Is it real or luck?** A statistics check (Fisher's exact test) says there's about a **4% chance** of a gap this big happening by luck alone, so it's very likely real.
+**Why (our best guesses):**
+1. **The notebook has the teacher's mistakes in it.** If the teacher writes the wrong math, the "correct" answer is wrong, the student is marked wrong, and that wrong answer goes into the notebook. One page said "The ISS pass lasted for 12 hours." (not even a question) with a "correct" answer of 720. Learning from pages like that teaches wrong things: *garbage in, garbage out*.
+2. **A small model copies what it just read.** With the notebook, the student sometimes repeated a number from the question or the examples instead of working it out (it answered 50 for "50 stars every minute, how many in 10 minutes?"). Longer prompts can confuse a model this small.
+
+**Lesson:** Showing an AI examples only helps if the examples are right. A checker that checks the math, but not whether the question makes sense, lets bad examples in. This is the same problem as the collapse experiment: an AI learning from unchecked AI writing gets worse.
