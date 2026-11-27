@@ -52,8 +52,10 @@ REFUSAL = re.compile(r"(i('m| am) sorry,? but i (can('|no)t|won't|am not able|am
 
 
 def is_refusal(text):
-    """Small models sometimes refuse harmless questions ("I'm sorry, but I can't assist with that.")."""
-    return bool(REFUSAL.search((text or "")[:160]))
+    """Small models sometimes refuse harmless questions ("I'm sorry, but I can't assist with that.").
+    Only short answers count: "I can't check live data, but the ISS goes about 28,000 km/h..." is a real answer."""
+    text = (text or "").strip()
+    return len(text) < 240 and bool(REFUSAL.search(text[:160]))
 
 
 # words too common to tell chats apart, for finding related things in your other chats

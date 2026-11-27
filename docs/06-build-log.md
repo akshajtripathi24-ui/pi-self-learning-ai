@@ -201,6 +201,7 @@ With the strict checker keeping bad examples out, the big gap (about 23% vs 46%)
 - If the answer is a refusal, it tries once more with short, simple instructions that say "only refuse if it's truly dangerous or harmful".
 - Refusals are never used as earlier messages, memories or titles.
 - If it still refuses, the answer is marked, and it tells you to try asking a different way.
+- Only **short** answers count as refusals. "I can't check live data, but the ISS goes about 28,000 km/h…" is a real answer, so it isn't retried. (Retrying it would waste up to a minute on a Pi.)
 
 A question that really is dangerous still gets refused: the retry doesn't change that.
 **Tested:** with a pretend model that refuses "kill" questions with the normal instructions (it answered on the retry), and one that always refuses (marked, and not used as the title).
