@@ -43,7 +43,19 @@ It works exactly like course 1: it writes its own questions, mostly about its we
 
 **Honest limits:** a brain this tiny can learn these exact kinds of question, but not "all of math". Even huge AIs find advanced math hard. It learns the *patterns* of these questions (like "multiply the number in front by the power, then take 1 off the power"), not a full understanding of algebra.
 
-**How long it takes:** in a test on a fast computer, it passed level 1 after 200 rounds (about 10 seconds), level 2 after about 2,300 rounds, and level 3 (its first algebra) after about 5,200 rounds, about 5 minutes in all. A Pi 4 is roughly 3 to 5 times slower, and the calculus levels are harder, so expect course 2 to take **hours**, not minutes. Watch the test score chart: it climbs, drops each time it levels up (a new, harder kind of question), then climbs again.
+**How long it takes:** in a test on a fast computer, it mastered **all 7 levels in about 12½ minutes** (about 10,800 rounds):
+
+| Level | Passed after |
+|---|---|
+| 1. Multiplying 1-digit numbers | 200 rounds |
+| 2. Multiplying 2-digit × 1-digit | 2,200 rounds |
+| 3. Solve x + b = c | 5,200 rounds |
+| 4. Solve ax + b = c | 8,500 rounds |
+| 5. Derivative of one term | 8,600 rounds (only 100 more!) |
+| 6. Derivative of two terms | 9,300 rounds |
+| 7. Mixed | mastered at about 10,800 rounds |
+
+Course 1 took about 4 minutes on that computer and about an hour on a Pi 4, so expect course 2 to take **roughly 2 to 3 hours** on a Pi 4. Watch the test score chart: it climbs, drops each time it levels up (a new, harder kind of question), then climbs again. Interesting: derivatives were *easier* for it than solving ax + b = c, because the derivative rule is a simple pattern (multiply by the power, take 1 off the power), while solving needs division.
 
 ## The trick: it writes answers backward
 Inside, it writes 47 + 38 = 85 as `047+038=5800.`: the answer is backward, ones digit first. That's how *you* add: you start with the ones, then carry to the tens. If it had to write the tens digit first, it would need to know about the carry before working out the ones! The web page shows the answer the normal way.
