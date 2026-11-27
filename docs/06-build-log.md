@@ -241,3 +241,23 @@ A question that really is dangerous still gets refused: the retry doesn't change
 
 **Tested:** 20,000 questions from every level of both courses, checked against the math engine (none wrong), typing each kind of question back in, and the course 2 brain we trained before still loading and scoring 97%.
 
+
+### 32. Giant numbers, tiny numbers and (-1)^7
+**Goal:** Keep testing the math engine with strange questions, the way a curious person (or a prankster) might use the Chat tab.
+**Problems found:**
+- **`((9^64)^64)^64` crashed the answer.** Python refuses to turn a number with more than 4,300 digits into text. One more `^64` would have made a number with millions of digits, which could keep a Pi busy for hours. Now numbers stop at about 1,000 digits ("too big to work out"), and powers are checked *before* they're worked out, so the Pi never even starts.
+- **`9^300` got no answer,** because powers of plain numbers stopped at 64. Now any power works if the answer fits in 1,000 digits (`9^300` has 287 digits). `1^1000000000` and `(-1)^1000000001` are worked out instantly, without multiplying a billion times.
+- **Tiny decimals were written like `1E-7`**, which is how computers write 0.0000001. Now they're written out normally.
+- **`(-1)^7` got no answer.** The engine only noticed math if a digit came right before the `+ - * / ^`, and here it's a bracket. Now `)` counts too.
+- **Very big or very small fractions could crash the "about" part** (like "about 2.33333"), because a normal computer number can't go above about 10^308. Now it falls back to a slower way that has no limit.
+
+**Tested:** 14 giant, tiny and strange questions (none crashed or took more than 0.01 seconds), and the 30 everyday questions from #27 again (all right).
+
+### 33. Two questions joined with "and"
+**Problem:** "whats 2.5 + 1.75 and how do i kill a stuck program" was treated as one question, so the AI only really answered half of it. The splitter only split at question marks.
+**Fix:** it also splits at "and", "also", "then" or "and then" when a question word comes next ("and how…", "and what…"). It doesn't split when that would break one question in two:
+- "how fast and how far can a rover go": both halves need at least 3 words.
+- "what's the difference between what I eat and what I drink": "difference", "between", "both" and "compare" mean it's one question about two things.
+- "I have 3 robots and 4 wheels each": it has to start like a question.
+
+**Tested:** 15 sentences, including all of those.

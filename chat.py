@@ -106,12 +106,41 @@ def only_fixed(original, fixed):
     return len(new) <= max(1, len(_words(fixed)) // 5)
 
 
+QWORDS = r"(?:what|what's|whats|how|why|when|where|who|whose|which|can|could|is|are|was|were|do|does|did|should|will|would)"
+ASKS = re.compile(r"^\W*(?:%s|solve|find|calculate|compute|work out|explain|tell me|describe|name|give)\b" % QWORDS, re.I)
+JOIN = re.compile(r",?\s+(and then|and also|and|also|plus|then)\s+(?=%s\b)" % QWORDS, re.I)
+ONE_THING = re.compile(r"\b(between|both|difference|compare|versus|vs)\b", re.I)
+
+
+def split_and(sentence):
+    """'what is 2.5 + 1.75 and how do I stop a program' -> two questions, even without a "?".
+    Only if it starts like a question and both halves are at least 3 words: "how fast and how far can a rover go"
+    is one question, and so is "what's the difference between what I eat and what I drink"."""
+    if not ASKS.match(sentence) or ONE_THING.search(sentence):
+        return [sentence]
+    bits = JOIN.split(sentence)                                  # [part, joining word, part, joining word, part...]
+    out = [bits[0].strip()]
+    for joiner, part in zip(bits[1::2], bits[2::2]):
+        part = part.strip()
+        if len(out[-1].split()) < 3 or len(part.split()) < 3:
+            out[-1] += " %s %s" % (joiner, part)                 # too short to be its own question: keep it joined
+        else:
+            out.append(part)
+    return out
+
+
 def split_questions(text, most=3):
     """'What is a robot? How do they move?' -> two questions. A sentence that isn't a question
     (like 'I have 3 robots.') stays with the question after it."""
     sentences = [s for s in re.split(r"(?<=[?!.])\s+", text.strip()) if s]
     questions, waiting = [], []
     for s in sentences:
+        parts = split_and(s)
+        if len(parts) > 1:                                       # "... and how ...": each part is a question
+            questions.append(" ".join(waiting + [parts[0]]))
+            questions += parts[1:]
+            waiting = []
+            continue
         waiting.append(s)
         if s.endswith("?"):
             questions.append(" ".join(waiting))

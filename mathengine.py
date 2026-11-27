@@ -16,6 +16,7 @@ from decimal import Decimal
 from fractions import Fraction
 
 MAX_POWER = 8            # x^8 is plenty for school math, and keeps the work small
+MAX_BITS = 3400          # numbers up to about 1,000 digits: bigger ones could keep a Pi busy for hours
 
 
 class MathError(ValueError):
@@ -27,6 +28,9 @@ class Poly:
 
     def __init__(self, terms=None):
         self.t = {p: Fraction(c) for p, c in (terms or {}).items() if c != 0}
+        for c in self.t.values():
+            if max(abs(c.numerator).bit_length(), c.denominator.bit_length()) > MAX_BITS:
+                raise MathError("that number is too big for me (more than 1,000 digits)")
 
     @staticmethod
     def num(n):
@@ -104,7 +108,7 @@ def fmt_number(f):
         while d % p == 0:
             d //= p
     if d == 1:                                        # only 2s and 5s underneath: it ends, so write it as a decimal
-        text = str(Decimal(f.numerator) / Decimal(f.denominator))
+        text = format(Decimal(f.numerator) / Decimal(f.denominator), "f")     # "f": 0.0000001, not 1E-7
         if len(text) <= 14:
             return text
     return "%d/%d" % (f.numerator, f.denominator)
@@ -171,10 +175,14 @@ class _Reader:
         if self.peek() == "^":
             self.take()
             power = self.factor()
-            if base.is_number() and power.is_number() and power.value().denominator == 1 and abs(power.value()) <= 64:
+            if base.is_number() and power.is_number() and power.value().denominator == 1:
                 b, n = base.value(), int(power.value())         # a plain number, like 2^10 or 10^-2
                 if b == 0 and n < 0:
                     raise MathError("I can only divide by a number that isn't 0")
+                if b in (0, 1, -1):
+                    return Poly.num(b ** (n % 2 + 2 if b == -1 and n else n))      # 1^1000000 is just 1
+                if max(abs(b.numerator).bit_length(), b.denominator.bit_length()) * abs(n) > MAX_BITS + 64:
+                    raise MathError("that number is too big for me (more than 1,000 digits)")   # (checked before working it out)
                 return Poly.num(b ** n)
             if not power.is_number() or power.value().denominator != 1 or not 0 <= power.value() <= MAX_POWER:
                 raise MathError("powers of x must be whole numbers from 0 to %d" % MAX_POWER)
@@ -399,14 +407,14 @@ def find_problem(text):
     if m:
         return "percent", "%s%% of %s" % (m.group(1), m.group(2)), show_value(Fraction(m.group(1)) / 100 * Fraction(m.group(2)))
     # square roots: "square root of 50", "sqrt(16)", "√2"
-    m = re.search(r"(?:square root of|sqrt|√)\s*\(?\s*(\d+(?:\.\d+)?)", t)
+    m = re.search(r"(?:square root of|sqrt|√)\s*\(?\s*(\d{1,30}(?:\.\d{1,10})?)(?![\d.])", t)
     if m:
         n = Fraction(m.group(1))
         root = _exact_sqrt(n)
         return "sqrt", "√" + m.group(1), fmt_number(root) if root is not None else "about %.6g" % math.sqrt(n)
     # plain arithmetic: the longest piece of math with an operator in it (a minus at the start counts: -5 + 3)
     for piece in sorted(re.findall(r"(?:(?<![\d)])-)?[\d(][\d\s+\-*/^().]*[\d)]", t), key=len, reverse=True):
-        if not re.search(r"\d\s*[-+*/^]\s*[-\d(]", piece):
+        if not re.search(r"[\d)]\s*[-+*/^]\s*[-\d(]", piece):       # an operator between numbers: 2+3, (-1)^7
             continue
         try:
             p = parse(piece)
@@ -415,6 +423,8 @@ def find_problem(text):
         except MathError as e:
             if "divide" in str(e):
                 return "arithmetic", " ".join(piece.split()), "nothing: you can't divide by 0"
+            if "too big" in str(e):
+                return "arithmetic", " ".join(piece.split()), "too big to work out (more than 1,000 digits)"
             continue
     return None
 
@@ -422,4 +432,12 @@ def find_problem(text):
 def show_value(v):
     """2.5 stays 2.5; 7/3 becomes '7/3 (about 2.33333)'."""
     text = fmt_number(v)
-    return text if "/" not in text else "%s (about %.6g)" % (text, float(v))
+    return text if "/" not in text else "%s (about %s)" % (text, about(v))
+
+
+def about(v):
+    """A rounded value for people: 2.33333, or 1.23457e+400 for numbers too big for a normal float."""
+    try:
+        return "%.6g" % float(v)
+    except OverflowError:
+        return format(Decimal(v.numerator) / Decimal(v.denominator), ".6g").replace("E", "e")

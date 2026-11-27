@@ -25,7 +25,7 @@ Like other chatbots, you can have lots of separate chats:
    - it added a sentence that isn't a question (that's usually an answer), or
    - it brought in lots of new words.
    Then it just uses what you typed.
-3. **✂️ It splits your questions.** "What's 47 times 38? And why do robots need sensors?" gets two separate answers, up to 3 per message.
+3. **✂️ It splits your questions.** "What's 47 times 38? And why do robots need sensors?" gets two separate answers, up to 3 per message. Questions joined with "and" work too, even without a question mark: "whats 2.5 + 1.75 and how do i stop a stuck program". But "how fast and how far can a rover go" stays one question (both halves need at least 3 words), and so does "what's the difference between…".
 4. **🧮 The math engine works out any math exactly.** Arithmetic ("47 times 38", "1,250 divided by 4", "7 squared", "-5 + 3"), **decimals** ("2.5 + 1.75", "10 divided by 4" is 2.5), **percentages** ("15% of 80"), **square roots** ("square root of 6.25"), algebra ("solve 3x + 5 = 20", "0.5x + 1.2 = 3", "x^2 - 5x + 6 = 0") and calculus ("derivative of 4x^3 + 2x", "integral of 6x^2"). The AI is told the exact answer, so it can't get the math wrong, and explains the steps.
    - Answers that end are shown as decimals (10 ÷ 4 = 2.5). Answers that never end are shown as a fraction *and* a rounded decimal: 10 ÷ 3 = 10/3 (about 3.33333). Dividing by 0 says you can't.
    - **🧠 Your trained math AI has a go too,** if it's the kind of question one of its courses practices (like `47+38`, `7*8`, `3x+5=20`, `d/dx 4x^3`, `2.5+1.7`, `x^2-5x+6=0` or `integral of 6x^2`). You'll see its answer with ✅ or ❌, and the level it's on, so you can watch it get better.
