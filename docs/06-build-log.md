@@ -166,3 +166,17 @@ With the strict checker keeping bad examples out, the big gap (about 23% vs 46%)
 - **The same chat was linked twice** when 2 memories came from it. Now each chat is linked once.
 
 **Tested:** with a pretend model server: new chats, AI titles, a follow-up seeing the earlier message, memory found across chats, rename, delete, sending while it's still busy (refused), and chats still there after a restart.
+
+### 26. Live typing, Stop, Try again, Read aloud, math steps and Export
+**Goal:** Make the chat feel like other chatbots, and show *how* math is solved.
+**How:**
+- **Live typing** asks the model to *stream* its answer: it sends each piece as soon as it's written, and the page shows it every 0.6 seconds. **Stop** works by hanging up on the model, which makes llama.cpp stop writing.
+- **Math steps:** the math engine now explains its work the way you'd do it in class: moving terms to one side, dividing, factoring, or using the quadratic formula, and the power rule for derivatives and integrals.
+- **Read aloud** uses the browser's built-in voice. **Export** builds the file in the browser, so nothing extra runs on the Pi.
+
+**Problems found while testing:**
+- **`5 = 2x - 7`** was solved by moving 2x across, which works but is awkward. Now it swaps the sides first, like you would: `2x - 7 = 5`.
+- **`x/3 = 7`** said "divide both sides by 1/3". Now it says "multiply both sides by 3".
+- **Exported chats said "null"** when the math AI gave no answer. Now they say "no answer".
+
+**Tested:** the steps for 12 kinds of equations, derivatives and integrals, and, with a pretend model that streams slowly: text appearing while it's written, stopping halfway (the model saw the hang-up), Try again giving a new answer, and Export downloading the chat with its steps.

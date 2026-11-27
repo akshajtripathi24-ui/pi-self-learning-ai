@@ -328,6 +328,14 @@ class Handler(BaseHTTPRequestHandler):
                 if not cid:
                     return self._send(409, {"error": "It's still answering your last message."})
                 return self._send(200, lab.chat.status(cid))
+            if path == "/api/chat/stop":
+                lab.chat.stop()
+                return self._send(200, {"ok": True})
+            if path == "/api/chat/regenerate":
+                cid = lab.chat.regenerate(str(body.get("chat", "")))
+                if not cid:
+                    return self._send(409, {"error": "Wait until it finishes answering."})
+                return self._send(200, lab.chat.status(cid))
             if path == "/api/chat/rename":
                 return self._send(200, {"ok": lab.chat.rename(str(body.get("chat", "")), body.get("title", ""))})
             if path == "/api/chat/delete":

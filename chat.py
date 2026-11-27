@@ -149,6 +149,7 @@ class Chat:
                     pass
         self.busy, self.busy_chat = False, None
         self.stage, self.stage_since = None, 0
+        self.stop_asked = False
 
     # ------------------------------------------------------------ saving and listing chats
     def _save(self, chat):
@@ -209,9 +210,25 @@ class Chat:
             c["updated"] = time.time()
             if not c["titled"] and len(c["messages"]) == 1:
                 c["title"] = clean_title("", text)            # a first title right away; the AI writes a better one
-            self.busy, self.busy_chat = True, c["id"]
+            self.busy, self.busy_chat, self.stop_asked = True, c["id"], False
             self._save(c)
         threading.Thread(target=self._work, args=(c, msg), daemon=True).start()
+        return c["id"]
+
+    def stop(self):
+        """The ⏹️ button: stop writing the answer."""
+        self.stop_asked = True
+
+    def regenerate(self, chat_id):
+        """The 🔄 button: answer your last message again, a bit differently."""
+        with self.lock:
+            c = self.chats.get(chat_id)
+            if self.busy or not c or not c["messages"]:
+                return None
+            msg = c["messages"][-1]
+            msg["answers"], msg["error"] = [], None
+            self.busy, self.busy_chat, self.stop_asked = True, c["id"], False
+        threading.Thread(target=self._work, args=(c, msg, True), daemon=True).start()
         return c["id"]
 
     # ------------------------------------------------------------ what it can use to answer
@@ -243,20 +260,23 @@ class Chat:
         self.bot.hold_until = time.time() + 120               # pause the practice while we chat
 
     # ------------------------------------------------------------ answering
-    def _work(self, chat, msg):
+    def _work(self, chat, msg, again=False):
         llm = self.bot.llm
         try:
             ok, why = llm.check()
             if not ok:
                 raise RuntimeError(why)
-            # 1. fix spelling and grammar
-            self._set("fixing")
-            fixed = llm.ask(FIX_PROMPT.format(text=msg["you"]), max_tokens=len(msg["you"]) // 2 + 40, temperature=0)
-            fixed = fixed.strip().split("\n")[0].strip().strip('"').strip()
-            fixed = re.sub(r"^(fixed|text)\s*:\s*", "", fixed, flags=re.I)
-            if not fixed or not only_fixed(msg["you"], fixed):
-                fixed = msg["you"]                             # the safety check: keep what you typed
-            msg["fixed"] = fixed
+            # 1. fix spelling and grammar (not again, if you asked for a different answer)
+            if again and msg.get("fixed"):
+                fixed = msg["fixed"]
+            else:
+                self._set("fixing")
+                fixed = llm.ask(FIX_PROMPT.format(text=msg["you"]), max_tokens=len(msg["you"]) // 2 + 40, temperature=0)
+                fixed = fixed.strip().split("\n")[0].strip().strip('"').strip()
+                fixed = re.sub(r"^(fixed|text)\s*:\s*", "", fixed, flags=re.I)
+                if not fixed or not only_fixed(msg["you"], fixed):
+                    fixed = msg["you"]                         # the safety check: keep what you typed
+                msg["fixed"] = fixed
             # 2. split it into questions
             questions, extra = split_questions(fixed)
             msg["skipped"] = extra
@@ -271,8 +291,11 @@ class Chat:
                 examples = []
                 if found:
                     kind, what, answer = found
-                    engine = {"kind": kind, "what": what, "answer": answer, "text": describe(kind, what, answer)}
+                    engine = {"kind": kind, "what": what, "answer": answer, "text": describe(kind, what, answer),
+                              "steps": mathengine.steps(kind, what)}
                     system += "\nA math engine worked this out exactly: %s. Use this answer, and explain the steps simply." % engine["text"]
+                    if engine["steps"]:
+                        system += "\nThe steps: " + " ".join("%d) %s." % (i + 1, st.rstrip(".")) for i, st in enumerate(engine["steps"]))
                     tutor = self.tutor(kind, what) if self.tutor else None   # ...and your trained math AI has a go too
                 elif re.search(r"\d", q):                                # a word problem: use checked practice problems
                     examples = self._examples(q)
@@ -288,14 +311,27 @@ class Chat:
                     convo.append({"role": "user", "content": m["fixed"] or m["you"]})
                     convo.append({"role": "assistant", "content": " ".join(a["a"] for a in m["answers"])[:600]})
                 convo.append({"role": "user", "content": q})
-                answer = llm.chat(convo, max_tokens=220, temperature=0.4).strip()
+                entry = {"q": q, "a": "", "engine": engine, "tutor": tutor, "examples": len(examples), "writing": True,
+                         "memories": list({cid: {"chat": cid, "title": t} for _, _, cid, t, _, _ in memories}.values())}
                 with self.lock:
-                    msg["answers"].append({"q": q, "a": answer, "engine": engine, "tutor": tutor, "examples": len(examples),
-                                           "memories": list({cid: {"chat": cid, "title": t} for _, _, cid, t, _, _ in memories}.values())})
+                    msg["answers"].append(entry)
+                self._set("writing")
+
+                def add(piece):                                        # live typing: each piece as it's written
+                    with self.lock:
+                        entry["a"] += piece
+                stopped = llm.chat_stream(convo, add, stop=lambda: self.stop_asked, max_tokens=260,
+                                          temperature=0.85 if again else 0.4)
+                with self.lock:
+                    entry["a"] = entry["a"].strip()
+                    entry["writing"] = False
+                    entry["stopped"] = stopped
                     chat["updated"] = time.time()
                     self._save(chat)
+                if stopped:
+                    break
             # 5. a title for a new chat
-            if not chat.get("titled") and len(chat["messages"]) == 1 and questions:
+            if not chat.get("titled") and len(chat["messages"]) == 1 and questions and not self.stop_asked:
                 self._set("titling")
                 title = llm.ask(TITLE_PROMPT.format(question=questions[0]), max_tokens=16, temperature=0.3)
                 with self.lock:

@@ -10,6 +10,14 @@ Like other chatbots, you can have lots of separate chats:
 - **Memory in a chat:** it remembers the last 3 questions and answers in the same chat, so follow-ups like "and how heavy is it?" work.
 - **🔗 Memory across chats:** before answering, it looks through your *other* chats for answers that share at least 2 important words with your question (or just 1 if you say something like "before", "earlier" or "remember"). It shows the AI up to 2 of them, and shows you where they came from: "🔗 Remembered from: Mars rover speed". Click the name to open that chat.
 
+## Buttons
+- **✍️ Live typing:** the answer appears word by word as the AI writes it, like other chatbots, so you don't wait 20–60 seconds for the whole thing.
+- **⏹️ Stop:** while it's writing, the Send button turns into Stop. It keeps what's written so far, and the AI really stops (the Pi hangs up on it).
+- **🔄 Try again:** under the last answer. It answers your last message again, a bit more creatively (a higher *temperature*: 0.85 instead of 0.4), so you get a different answer.
+- **🔊 Read aloud:** under every answer. It uses your browser's own voice, so nothing is sent anywhere. Math is read the way you'd say it ("x squared", "the derivative of"). Press it again to stop.
+- **📝 Show the steps:** for algebra and calculus, the math engine shows every step, like "Subtract 5 from both sides: 3x = 15", then "Divide both sides by 3: x = 5". The AI is given the steps too, so its explanation matches.
+- **⬇️ Export:** downloads the whole chat as a text file (Markdown, `.md`), including the math engine's steps.
+
 ## What happens when you press Send
 1. **✏️ It fixes your message.** The AI rewrites it with the spelling and grammar fixed, and shows you what it understood: "I read this as: What is the biggest planet?"
 2. **🛡️ A safety check makes sure it *only* fixed it.** Small AIs sometimes answer the question instead of fixing it ("…is Jupiter."), or change it. The check refuses the fix if:

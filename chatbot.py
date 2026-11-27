@@ -291,6 +291,42 @@ class LLM:
             self.speed = round(r["timings"]["predicted_per_second"], 1)
         return r["choices"][0]["message"]["content"]
 
+    def chat_stream(self, messages, on_text, stop=None, max_tokens=220, temperature=0.4):
+        """Like chat(), but hands over each piece of the answer as soon as the model writes it (for "live typing").
+        If stop() becomes true, it hangs up, and the model stops writing. Returns True if it was stopped."""
+        if getattr(self, "backend", "ollama") == "ollama":
+            url = self.cfg["ollama_url"].rstrip("/") + "/api/chat"
+            body = {"model": self.cfg["model"], "messages": messages, "stream": True,
+                    "options": {"temperature": temperature, "num_predict": max_tokens}}
+        else:
+            url = self.cfg["llamacpp_url"].rstrip("/") + "/v1/chat/completions"
+            body = {"messages": messages, "max_tokens": max_tokens, "temperature": temperature, "stream": True}
+        req = urllib.request.Request(url, data=json.dumps(body).encode(), headers={"Content-Type": "application/json"})
+        t0, pieces = time.time(), 0
+        with urllib.request.urlopen(req, timeout=300) as r:
+            for raw in r:                                       # one line at a time, as they arrive
+                if stop and stop():
+                    return True                                 # leaving here hangs up on the model
+                line = raw.decode("utf-8", "ignore").strip()
+                if line.startswith("data:"):
+                    line = line[5:].strip()
+                if not line or line == "[DONE]":
+                    continue
+                try:
+                    j = json.loads(line)
+                except ValueError:
+                    continue
+                if "choices" in j:                              # llama.cpp
+                    piece = (j["choices"][0].get("delta") or {}).get("content") or ""
+                else:                                           # Ollama
+                    piece = (j.get("message") or {}).get("content") or ""
+                if piece:
+                    pieces += 1
+                    on_text(piece)
+        if pieces > 3:
+            self.speed = round(pieces / max(0.1, time.time() - t0), 1)
+        return False
+
     def ask(self, prompt, max_tokens=160, temperature=0.7):
         if getattr(self, "backend", "ollama") == "ollama":
             r = self._post(self.cfg["ollama_url"].rstrip("/") + "/api/generate",

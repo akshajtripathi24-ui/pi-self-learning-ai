@@ -81,6 +81,14 @@ footer{text-align:center;color:var(--muted);font-size:12px;padding:20px}footer a
 .chathead{display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--line);padding-bottom:8px;margin-bottom:8px;min-width:0}
 .chathead b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .bubble .fix a{color:var(--accent);cursor:pointer}
+.bubble .acts{display:flex;gap:6px;margin-top:8px;white-space:normal}
+.bubble .act{background:transparent;border:1px solid var(--line);color:var(--muted);padding:2px 9px;font-size:12px;border-radius:6px;font-weight:600}
+.bubble .act:hover{color:var(--accent);border-color:#155e75}
+.bubble details.steps{margin-top:6px;font-size:13px;color:var(--muted);white-space:normal}
+.bubble details.steps summary{cursor:pointer}
+.bubble details.steps ol{margin:6px 0 0;padding-left:20px}
+.cursor{display:inline-block;animation:blink 1s steps(1) infinite;color:var(--accent)}
+@keyframes blink{50%{opacity:0}}
 @media (max-width:760px){.chatwrap{grid-template-columns:1fr}.chatside{border-right:0;padding-right:0;border-bottom:1px solid var(--line);padding-bottom:10px}#chatlist{max-height:180px}}
 .chatbox textarea{flex:1;resize:vertical;min-height:46px;padding:9px 11px;border-radius:10px;border:1px solid var(--line);background:#0b1222;color:var(--text);font:inherit;font-size:15px}
 </style>
@@ -196,10 +204,10 @@ footer{text-align:center;color:var(--muted);font-size:12px;padding:20px}footer a
         <div id="chatlist"></div>
       </aside>
       <div class="chatmain">
-        <div class="chathead"><b id="chattitle">New chat</b><span style="flex:1"></span><button class="ghost small" id="chatrename">✏️ Rename</button><button class="ghost small" id="chatdelete">🗑️ Delete</button></div>
+        <div class="chathead"><b id="chattitle">New chat</b><span style="flex:1"></span><button class="ghost small" id="chatexport">⬇️ Export</button><button class="ghost small" id="chatrename">✏️ Rename</button><button class="ghost small" id="chatdelete">🗑️ Delete</button></div>
         <div id="chatlog" class="chatlog"></div>
         <p class="muted" id="chatstage" style="min-height:20px;margin:8px 0 0"></p>
-        <div class="chatbox"><textarea id="chatin" rows="2" placeholder="Ask anything… (Enter to send, Shift + Enter for a new line)"></textarea><button id="chatsend">Send</button></div>
+        <div class="chatbox"><textarea id="chatin" rows="2" placeholder="Ask anything… (Enter to send, Shift + Enter for a new line)"></textarea><button id="chatsend">Send</button><button id="chatstop" class="hide" style="background:var(--bad)">⏹️ Stop</button></div>
       </div>
     </div>
   </section>
@@ -451,7 +459,7 @@ async function loadChat() {
   $('chattitle').textContent = c.chat ? c.chat.title : 'New chat';
   $('chatrename').disabled = $('chatdelete').disabled = !c.chat;
   const msgs = c.chat ? c.chat.messages : [];
-  const html = msgs.map(m => {
+  const html = msgs.map((m, mi) => {
     let h = `<div class="bubble you">${esc(m.you)}${m.fixed && !same(m.fixed, m.you) ? `<div class="fix">✏️ I read this as: ${esc(m.fixed)}</div>` : ''}</div>`;
     const many = m.answers.length > 1 || m.skipped;
     h += m.answers.map((a, i) => {
@@ -460,21 +468,34 @@ async function loadChat() {
       if (a.tutor) notes += `<div class="fix">🧠 Your tiny math AI (course ${a.tutor.course}, trained on this Pi) says: <b>${esc(a.tutor.answer == null ? '?' : a.tutor.answer)}</b> ${a.tutor.ok ? '✅' : `❌ (it's still learning: ${a.tutor.mastered ? 'mastered the course, but not this one' : 'level ' + a.tutor.level + ' of ' + a.tutor.levels})`}</div>`;
       if (a.examples) notes += `<div class="fix">📒 Used ${a.examples} checked example${a.examples > 1 ? 's' : ''} from the Chatbot's practice</div>`;
       if (a.memories && a.memories.length) notes += `<div class="fix">🔗 Remembered from: ${a.memories.map(x => `<a data-open="${esc(x.chat)}">${esc(x.title)}</a>`).join(', ')}</div>`;
-      return `<div class="bubble ai">${many ? `<b>${i + 1}. ${esc(a.q)}</b>\n` : ''}${esc(a.a)}${notes}</div>`;
+      if (a.engine && a.engine.steps && a.engine.steps.length) notes += `<details class="steps"><summary>📝 Show the steps</summary><ol>${a.engine.steps.map(st => `<li>${esc(st)}</li>`).join('')}</ol></details>`;
+      if (a.stopped) notes += `<div class="fix">⏹️ Stopped</div>`;
+      const last = mi === msgs.length - 1 && i === m.answers.length - 1;
+      const acts = a.writing ? '' : `<div class="acts"><button class="act" data-say="${mi}:${i}">🔊 Read aloud</button>${last && !c.busy ? '<button class="act" data-regen="1">🔄 Try again</button>' : ''}</div>`;
+      return `<div class="bubble ai">${many ? `<b>${i + 1}. ${esc(a.q)}</b>\n` : ''}${esc(a.a)}${a.writing ? '<span class="cursor">▌</span>' : ''}${notes}${acts}</div>`;
     }).join('');
     if (m.skipped && m.answers.length === 3) h += `<div class="bubble ai">I answered the first 3 questions. Ask the other ${m.skipped} in a new message!</div>`;
     if (m.error) h += `<div class="bubble ai" style="border-color:var(--bad)">⚠️ ${esc(m.error)}</div>`;
     return h;
   }).join('') || '<p class="muted">Ask your first question below. Try one with mistakes, like: wat is the bigest planet and how far is it</p>';
   if (html !== chatHtml) {
-    $('chatlog').innerHTML = chatHtml = html; $('chatlog').scrollTop = $('chatlog').scrollHeight;
-    document.querySelectorAll('#chatlog [data-open]').forEach(a => a.onclick = () => openChat(a.dataset.open));
+    const log = $('chatlog'), nearBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 80 || !chatHtml;
+    const open = [...log.querySelectorAll('details.steps')].map(d => d.open);      // keep "Show the steps" open while it updates
+    log.innerHTML = chatHtml = html;
+    log.querySelectorAll('details.steps').forEach((d, k) => { if (open[k]) d.open = true; });
+    if (nearBottom) log.scrollTop = log.scrollHeight;
+    log.querySelectorAll('[data-open]').forEach(a => a.onclick = () => openChat(a.dataset.open));
+    log.querySelectorAll('[data-say]').forEach(b => b.onclick = () => { const [mi, i] = b.dataset.say.split(':').map(Number); say(msgs[mi].answers[i].a, b); });
+    log.querySelectorAll('[data-regen]').forEach(b => b.onclick = regenerate);
   }
   const speed = c.speed ? ` · ${c.speed} tokens a second` : '';
   const here = !c.busy_chat || c.busy_chat === chatId;
   $('chatstage').textContent = !c.busy ? '' : !here ? '⏳ It\'s answering in another chat. Wait a moment…' :
-    (c.stage === 'fixing' ? '✏️ Fixing the spelling and grammar… ' : c.stage === 'answering' ? '🤔 Thinking… ' : c.stage === 'titling' ? '🏷️ Naming this chat… ' : '⏳ Getting ready… ') + (c.stage_seconds || 0) + ' s' + speed;
+    (c.stage === 'fixing' ? '✏️ Fixing the spelling and grammar… ' : c.stage === 'answering' ? '🤔 Thinking… ' : c.stage === 'writing' ? '✍️ Writing… ' : c.stage === 'titling' ? '🏷️ Naming this chat… ' : '⏳ Getting ready… ') + (c.stage_seconds || 0) + ' s' + speed;
   $('chatsend').disabled = c.busy;
+  $('chatsend').classList.toggle('hide', c.busy && here);
+  $('chatstop').classList.toggle('hide', !(c.busy && here));
+  $('chatexport').disabled = !c.chat;
 }
 async function sendChat() {
   const text = $('chatin').value.trim();
@@ -485,6 +506,51 @@ async function sendChat() {
   loadChat();
 }
 $('chatsend').onclick = sendChat;
+$('chatstop').onclick = async () => { await post('/api/chat/stop'); loadChat(); };
+async function regenerate() {
+  try { await post('/api/chat/regenerate', {chat: chatId}); } catch (e) { $('chatstage').textContent = '⚠️ ' + e.message; }
+  loadChat();
+}
+// 🔊 read aloud, with the browser's own voice (nothing is sent anywhere)
+let speaking = null;
+function say(text, btn) {
+  if (!('speechSynthesis' in window)) { alert("Sorry, this browser can't read aloud."); return; }
+  const wasMe = speaking === btn;
+  speechSynthesis.cancel();
+  document.querySelectorAll('[data-say]').forEach(b => b.textContent = '🔊 Read aloud');
+  speaking = null;
+  if (wasMe) return;                                  // pressing it again stops it
+  const words = text.replace(/d\/dx/g, 'the derivative of').replace(/\^2\b/g, ' squared').replace(/\^3\b/g, ' cubed')
+    .replace(/\^(\d+)/g, ' to the power of $1').replace(/[×*]/g, ' times ').replace(/÷/g, ' divided by ').replace(/√/g, 'the square root of ');
+  const u = new SpeechSynthesisUtterance(words);
+  const voice = speechSynthesis.getVoices().find(v => v.localService && v.lang.startsWith('en'));
+  if (voice) u.voice = voice;
+  u.onend = () => { if (speaking === btn) { btn.textContent = '🔊 Read aloud'; speaking = null; } };
+  speaking = btn; btn.textContent = '⏹️ Stop reading';
+  speechSynthesis.speak(u);
+}
+// ⬇️ export: the whole chat as a text file you can keep
+$('chatexport').onclick = () => {
+  if (!chat || !chat.chat) return;
+  const c = chat.chat;
+  let out = `# ${c.title}\n\nA chat with the Pi Self-Learning AI (${chat.model || 'AI'}), saved ${new Date().toLocaleString()}.\n`;
+  for (const m of c.messages) {
+    out += `\n**You:** ${m.you}\n`;
+    if (m.fixed && !same(m.fixed, m.you)) out += `*(read as: ${m.fixed})*\n`;
+    for (const a of m.answers) {
+      out += `\n**AI:** ${a.a}\n`;
+      if (a.engine) out += `\n- Math engine: ${a.engine.text}\n` + (a.engine.steps || []).map((st, k) => `  ${k + 1}. ${st}\n`).join('');
+      if (a.tutor) out += `- Your math AI said: ${a.tutor.answer == null ? 'no answer' : a.tutor.answer} ${a.tutor.ok ? '(right)' : '(wrong)'}\n`;
+    }
+    if (m.error) out += `\n(Problem: ${m.error})\n`;
+  }
+  const blob = new Blob([out], {type: 'text/markdown'});
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(blob);
+  link.download = (c.title.replace(/[^a-z0-9 ]/gi, '').trim() || 'chat') + '.md';
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(link.href), 2000);
+};
 $('chatin').addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChat(); } });
 $('chatnew').onclick = () => { openChat(null); $('chatin').focus(); };
 $('chatsearch').oninput = () => { chatListHtml = ''; loadChat(); };
@@ -504,7 +570,7 @@ setTab(tab);
 setInterval(() => { if (tab === 'math') loadMath(); }, 1500);
 setInterval(() => { if (tab === 'bot') loadBot(); }, 3000);
 setInterval(() => { if (tab === 'col') loadCol(); }, 3000);
-setInterval(() => { if (tab === 'chat') loadChat(); }, 1000);
+setInterval(() => { if (tab === 'chat') loadChat(); }, 600);          // often, so live typing looks smooth
 window.addEventListener('resize', refresh);
 </script>
 </body>

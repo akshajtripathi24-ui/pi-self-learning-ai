@@ -224,6 +224,102 @@ def show_x(values):
     return ", ".join("x = " + (fmt_number(v) if isinstance(v, Fraction) else ("%g" % v)) for v in values)
 
 
+# ---------------------------------------------------------------- showing the steps (for the Chat tab)
+def _x(n):
+    return "" if n == 0 else "x" if n == 1 else "x^%d" % n
+
+
+def _term(c, n):
+    """One term as text: (3, 2) -> '3x^2', (1, 1) -> 'x', (-5, 0) -> '-5'."""
+    if n == 0:
+        return fmt_number(c)
+    if c == 1:
+        return _x(n)
+    if c == -1:
+        return "-" + _x(n)
+    return ("(%s)" % fmt_number(c) if Fraction(c).denominator != 1 else fmt_number(c)) + _x(n)
+
+
+def steps(kind, what):
+    """How to get the answer, step by step, the way you'd do it in class."""
+    try:
+        if kind == "solve":
+            return _solve_steps(what)
+        if kind == "derivative":
+            p = parse(what)
+            out = ["Use the power rule on each term: the derivative of ax^n is (a × n)x^(n−1)."]
+            for n in sorted(p.t, reverse=True):
+                c = p.t[n]
+                if n == 0:
+                    out.append("%s → 0 (a number on its own never changes, so its derivative is 0)" % fmt_number(c))
+                elif n == 1:
+                    out.append("%s → %s (the x goes away)" % (_term(c, 1), fmt_number(c)))
+                else:
+                    out.append("%s → %s × %d = %s, and the power goes down to %d: %s"
+                               % (_term(c, n), fmt_number(c), n, fmt_number(c * n), n - 1, _term(c * n, n - 1)))
+            out.append("So the derivative is %s" % p.derivative())
+            return out
+        if kind == "integral":
+            p = parse(what)
+            out = ["Use the power rule for integrals on each term: the integral of ax^n is (a ÷ (n+1))x^(n+1)."]
+            for n in sorted(p.t, reverse=True):
+                c = p.t[n]
+                if n == 0:
+                    out.append("%s → %s (a number on its own gets an x)" % (fmt_number(c), _term(c, 1)))
+                else:
+                    out.append("%s → %s ÷ %d = %s, and the power goes up to %d: %s"
+                               % (_term(c, n), fmt_number(c), n + 1, fmt_number(c / (n + 1)), n + 1, _term(c / (n + 1), n + 1)))
+            out.append("Add + C: any number's derivative is 0, so we can't tell which number was there.")
+            out.append("So the integral is %s + C" % p.integral())
+            return out
+    except (MathError, ZeroDivisionError):
+        pass
+    return []
+
+
+def _solve_steps(equation):
+    left, right = equation.split("=")
+    L, R = parse(left), parse(right)
+    out = ["Start with: %s = %s" % (L, R)]
+    p = L - R
+    if p.degree() == 1:
+        if not L.t.get(1) and R.t.get(1):                         # the x is only on the right: swap the sides
+            L, R = R, L
+            out.append("Swap the sides: %s = %s" % (L, R))
+        if R.t.get(1):                                            # x on the right: move it to the left
+            k = R.t[1]
+            L, R = L - Poly({1: k}), R - Poly({1: k})
+            out.append("%s %s from both sides: %s = %s" % ("Subtract" if k > 0 else "Add", _term(abs(k), 1), L, R))
+        if L.t.get(0):                                            # a number on the left: move it to the right
+            k = L.t[0]
+            L, R = L - Poly.num(k), R - Poly.num(k)
+            out.append("%s %s %s both sides: %s = %s" % ("Subtract" if k > 0 else "Add", fmt_number(abs(k)),
+                                                          "from" if k > 0 else "to", L, R))
+        a = L.t.get(1, 0)
+        if a != 1 and a.numerator == 1:                           # (1/3)x: multiply by 3
+            out.append("Multiply both sides by %s: x = %s" % (fmt_number(1 / a), fmt_number(R.value() / a)))
+        elif a != 1:
+            out.append("Divide both sides by %s: x = %s" % (fmt_number(a), fmt_number(R.value() / a)))
+        return out
+    if p.degree() == 2:
+        if R.t:
+            out.append("Move everything to the left side: %s = 0" % p)
+        a, b, c = p.t.get(2, 0), p.t.get(1, 0), p.t.get(0, 0)
+        roots = solve(equation)
+        if all(isinstance(r, Fraction) for r in roots):
+            brackets = "".join("(x %s %s)" % ("-" if r >= 0 else "+", fmt_number(abs(r))) for r in roots)
+            if len(roots) == 1:
+                brackets = brackets + "^2"
+            out.append("Factor it: %s%s = 0" % ("" if a == 1 else fmt_number(a), brackets))
+            out.append("A product is 0 only if one bracket is 0, so " + " or ".join("x = %s" % fmt_number(r) for r in roots))
+        else:
+            out.append("It doesn't factor nicely, so use the quadratic formula: x = (−b ± √(b² − 4ac)) ÷ 2a, with a = %s, b = %s, c = %s"
+                       % (fmt_number(a), fmt_number(b), fmt_number(c)))
+            out.append("b² − 4ac = %s, so x = %s" % (fmt_number(b * b - 4 * a * c), " or ".join("%g" % r for r in roots)))
+        return out
+    return []
+
+
 # ---------------------------------------------------------------- finding math in a question (for the Chat tab)
 def find_problem(text):
     """Look for algebra, calculus or arithmetic in a question. Returns (kind, what, answer) or None,
