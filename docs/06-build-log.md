@@ -103,7 +103,15 @@ What happened when it was installed on a real Raspberry Pi 4 (32-bit Pi OS, with
 ### 18. Three experiments to find out why
 **Plan:** Result 17 gave two possible reasons, so the chatbot now has experiment settings to test them one at a time: a **strict checker** that keeps bad questions out of the notebook, the number of **notebook pages** shown (1 to 3), and a **bigger model** (Qwen 2.5 1.5B, switched with `bash setup-llamacpp.sh 1.5b`). Every experiment is saved in a table on the Chatbot tab, so they can be compared. The first experiment (27% vs 45%) was kept as experiment 1.
 **Tested:** with a pretend model server: the old result was saved as experiment 1 with the model that produced it, the strict checker threw away "no question" and "numbers not in the question" problems, and switching the model started a new experiment by itself. The bigger model's download hasn't been tested yet (the computer used to build this can't download models).
-**Results:** *will be added here after running them on the Pi.*
+**Results so far:**
+
+| Experiment | Settings | 📒 With the notebook | Without | Result |
+|---|---|---|---|---|
+| 1 | 0.5B, 3 pages, normal checker | 27% (19/71) | 46% (33/71) | the notebook made it worse (2.3% chance it's luck) |
+| 2 | same as 1 (an accidental repeat, see 20) | 18% (9/49) | 45% (22/49) | the notebook made it worse (0.9%) |
+| 3 | 0.5B, 3 pages, **strict checker** | 37% (11/30) | 43% (13/30) | **no clear difference** (79% chance it's luck) |
+
+With the strict checker keeping bad examples out, the big gap (about 23% vs 46%) **closed to 37% vs 43%**, and the difference is no longer clear. So the bad examples were most of the problem: *garbage in, garbage out*. But a clean notebook didn't clearly *help* either, at least not after 30 rounds each. More rounds, the 1-page setting and the bigger model are the next things to test.
 
 ### 19. The collapse experiment said "Stopped." with no reason
 **Problem:** The collapse experiment page just said "Stopped.", with no rounds done. Also, 60 rounds had been typed in, but the most it allowed was 10, and it cut it down without saying so.
@@ -115,3 +123,10 @@ What happened when it was installed on a real Raspberry Pi 4 (32-bit Pi OS, with
 **Cause:** The page refreshes every 3 seconds, and each refresh put the settings boxes back to the saved settings. If the strict checker box was ticked and then the page refreshed before ▶ was pressed (for example after clicking the text next to the box), it got unticked again. The same kind of bug happened in the Docking AI's experiments card.
 **Fix:** Once you change a setting, the refresh leaves it alone until you start the experiment. The confirm box also says the exact settings you're about to start with ("strict checker ON"), so a mistake is easy to spot.
 **A lucky result:** The accidental repeat got the same answer as experiment 1. It finished at **18% right with the notebook (9 of 49), 45% without (22 of 49)**, a 0.9% chance of luck on its own. Experiment 1 finished at 27% vs 46% (19 of 71 vs 33 of 71). Repeating an experiment and getting the same result is called **replication**, and it's how scientists check that a result is real. With both runs added together (28 of 120 vs 55 of 120), the chance that the difference is luck is only about **0.04%** (about 1 in 2,500). The notebook really does make this small model worse.
+
+### 21. The Chat tab, and the AI that answered instead of fixing
+**What it is:** A new tab to type any question to the AI. It fixes your spelling and grammar first, splits several questions into separate answers, and has Python check any math so the numbers are right ([7. Chat with it](07-chat.md)).
+**Problem:** Asking the small AI to "fix the spelling" doesn't always work. Sometimes it *answers* the question instead: asked to fix "wat is the bigest planet", it can reply "The biggest planet in our solar system is Jupiter." Then the chat would try to answer an answer.
+**Fix:** A safety check compares the fix with what you typed, and keeps what you typed if the fix doesn't look like a fix. The first version only compared the letters, and it let "…is Jupiter." through, because that sentence uses mostly the same words. It now also checks that the AI didn't add any sentence that isn't a question, and didn't bring in many new words.
+**Another bug found while testing:** "What is the biggest planet? It's Jupiter." still got through, because the check thought "It's" was the question word "is" spelled wrong. Short question words (is, do, can, how…) now have to match exactly; only longer ones can be misspelled ("wat" for "what").
+**Tested:** 16 typical fixes, all handled correctly, plus the whole chat with a pretend model server.

@@ -57,8 +57,9 @@ def clean_math(expr):
     return " ".join(expr.split()).strip(" *.")                  # leftover "**" or a final period
 
 
-def safe_math(expr):
-    """The checker: works out simple math like (3 + 4) * 12 safely. Anything else is refused."""
+def safe_math(expr, whole=True):
+    """The checker: works out simple math like (3 + 4) * 12 safely. Anything else is refused.
+    whole=True also refuses answers that aren't whole numbers (the practice problems need whole numbers)."""
     expr = clean_math(expr)
     if not expr or len(expr) > 80 or not re.fullmatch(r"[\d\s+\-*/().]+", expr):
         raise ValueError("not simple math")
@@ -85,9 +86,9 @@ def safe_math(expr):
         value = ev(tree)
     except ZeroDivisionError:
         raise ValueError("it divides by zero")
-    if abs(value) > 1e7 or abs(value - round(value)) > 1e-9:
+    if abs(value) > 1e12 or (whole and (abs(value) > 1e7 or abs(value - round(value)) > 1e-9)):
         raise ValueError("the answer isn't a whole number")
-    return int(round(value))
+    return int(round(value)) if abs(value - round(value)) < 1e-9 else round(value, 6)
 
 
 def parse_teacher(text):
@@ -194,6 +195,19 @@ class LLM:
         except Exception:
             return False, "No language model found. Start Ollama or the llama.cpp server (see docs/03-chatbot.md)."
 
+    def chat(self, messages, max_tokens=200, temperature=0.4):
+        """A whole conversation: [{"role": "system" / "user" / "assistant", "content": ...}, ...]."""
+        if getattr(self, "backend", "ollama") == "ollama":
+            r = self._post(self.cfg["ollama_url"].rstrip("/") + "/api/chat",
+                           {"model": self.cfg["model"], "messages": messages, "stream": False,
+                            "options": {"temperature": temperature, "num_predict": max_tokens}})
+            return r.get("message", {}).get("content", "")
+        r = self._post(self.cfg["llamacpp_url"].rstrip("/") + "/v1/chat/completions",
+                       {"messages": messages, "max_tokens": max_tokens, "temperature": temperature})
+        if r.get("timings", {}).get("predicted_per_second"):
+            self.speed = round(r["timings"]["predicted_per_second"], 1)
+        return r["choices"][0]["message"]["content"]
+
     def ask(self, prompt, max_tokens=160, temperature=0.7):
         if getattr(self, "backend", "ollama") == "ollama":
             r = self._post(self.cfg["ollama_url"].rstrip("/") + "/api/generate",
@@ -222,6 +236,7 @@ class Chatbot:
         self.connection = (False, "Not checked yet")
         self.feed = deque(maxlen=30)
         self.stage, self.stage_since = None, 0      # what it's doing right now, for the web page
+        self.hold_until = 0                         # the Chat tab pauses practice until this time
         self.rng = random.Random()
         try:
             with open(self.file) as f:
@@ -311,7 +326,7 @@ class Chatbot:
 
     def run(self):
         while True:
-            if not self.running:
+            if not self.running or time.time() < self.hold_until:     # stopped, or paused while you chat
                 time.sleep(1)
                 continue
             self.connection = self.llm.check()

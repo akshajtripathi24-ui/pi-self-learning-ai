@@ -6,6 +6,7 @@ Three ways an AI can **teach itself**, all running on a Raspberry Pi:
 |---|---|---|
 | 🧮 | **The self-taught math AI** | A tiny GPT (the same kind of AI as ChatGPT, a million times smaller) starts knowing nothing. It writes its own quiz questions, mostly about what it's worst at, answers them, and a calculator checks every answer. It goes from adding 1-digit numbers to adding and subtracting 3-digit numbers, all by itself. |
 | 💬 | **The self-quizzing chatbot** | A small ready-made AI language model writes its own math word problems, Python checks the math, then it answers them. Wrong answers go into a notebook, and an experiment tests whether reading the notebook helps. |
+| 🗨️ | **Chat with it** | Type any question, even with spelling mistakes. It fixes your message, answers each question, and Python checks any math. |
 | 🔬 | **The model-collapse experiment** | What happens when an AI learns only from its own writing? Round after round, its sentences get stranger and more repetitive, unless you keep real writing in the mix. |
 
 The big idea: **an AI can only teach itself if something checks its work.** Parts 1 and 2 have a checker. Part 3 shows what happens without one.
@@ -33,6 +34,7 @@ The big idea: **an AI can only teach itself if something checks its work.** Part
 | 4 | [The collapse experiment](docs/04-collapse-experiment.md) | What we found, and things to try |
 | 5 | [Troubleshooting](docs/05-troubleshooting.md) | Problems and fixes |
 | 6 | [Build log](docs/06-build-log.md) | The real problems we hit while building it |
+| 7 | [Chat with it](docs/07-chat.md) | How the Chat tab fixes spelling, splits questions and checks math |
 
 ## Quick install
 ```bash
@@ -54,6 +56,7 @@ It uses port **8100**, so it runs next to the [Pi Stock Tracker](https://github.
 | `tinygpt.py` | The tiny GPT: attention, the neural network, backpropagation and the Adam optimizer, written out by hand |
 | `selfmath.py` | Part 1: the math AI's self-quizzing, checking, notebook and levels |
 | `chatbot.py` | Part 2: the teacher, checker, student and notebook, talking to Ollama or llama.cpp |
+| `chat.py` | The Chat tab: fixing spelling and grammar, splitting questions, checking math, answering |
 | `collapse.py` | Part 3: the model-collapse experiment |
 | `facts.txt` | 100 true space and robot facts, the starting sentences for part 3 |
 | `server.py` | Runs everything and serves the website |

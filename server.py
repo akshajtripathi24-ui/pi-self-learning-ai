@@ -24,6 +24,7 @@ from urllib.parse import parse_qs, urlparse
 
 import collapse
 import selfmath
+from chat import Chat
 from chatbot import Chatbot, compare
 
 PORT = int(os.environ.get("SELF_PORT", "8100"))      # stock tracker 8000, ISS tracker 8080, docking AI 8090
@@ -82,6 +83,7 @@ class Lab:
         self.math.paused = cfg["math_paused"]
         self.bot = Chatbot(DATA, cfg)
         self.bot.running = cfg["chatbot_running"]           # keep practicing after the Pi restarts
+        self.chat = Chat(self.bot)                            # part 4: talk to the AI
         self.collapse_proc = None
         self.collapse_path = None
         for path in glob.glob(os.path.join(RUNS, "*.json")):          # runs that were cut off by a restart
@@ -154,6 +156,7 @@ class Lab:
                     "with": st["with"], "without": st["without"], "history": st["history"][-300:], "feed": list(b.feed)[:15],
                     "notebook": st["notebook"][-8:][::-1], "notebook_size": len(st["notebook"]), "model": self.cfg["model"],
                     "stage": b.stage, "stage_seconds": round(time.time() - b.stage_since) if b.stage else None, "speed": b.llm.speed,
+                    "paused_for_chat": time.time() < b.hold_until,
                     "load": round(os.getloadavg()[0], 1), "cores": os.cpu_count() or 4,
                     "settings": st["settings"], "result": compare(st["with"], st["without"]),
                     "runs": [dict(r, result=compare(r["with"], r["without"])) for r in st["runs"]]}
@@ -187,6 +190,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(200, lab.collapse_status())
             if path == "/api/chatbot":
                 return self._send(200, lab.chatbot_status())
+            if path == "/api/chat":
+                return self._send(200, lab.chat.status())
             return self._send(404, {"error": "not found"})
         except Exception as e:
             print("error on", path, e, flush=True)
@@ -226,6 +231,13 @@ class Handler(BaseHTTPRequestHandler):
                 if lab.bot.running:
                     lab.bot.connection = lab.bot.llm.check()
                 return self._send(200, lab.chatbot_status())
+            if path == "/api/chat/send":
+                if not lab.chat.send(body.get("text", "")):
+                    return self._send(409, {"error": "It's still answering your last message."})
+                return self._send(200, lab.chat.status())
+            if path == "/api/chat/clear":
+                lab.chat.clear()
+                return self._send(200, lab.chat.status())
             if path == "/api/chatbot/experiment":
                 pages = max(1, min(3, int(body.get("pages", 3))))
                 lab.bot.new_experiment(pages, bool(body.get("strict", False)))
