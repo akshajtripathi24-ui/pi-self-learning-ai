@@ -53,6 +53,17 @@ Open the **💬 Chatbot** tab and press **▶ Start practicing**. The badge shou
 
 The first round takes a while, so watch the line under the buttons. It shows what the AI is doing right now (✍️ the teacher writing a question, or 🤔 the student answering), how many seconds so far, and its **speed in tokens a second**. A *token* is a piece of a word: language models read and write in tokens, not letters or whole words.
 
+## Experiments
+The first experiment on our Pi found that **the notebook made it worse** (27% right with it, 45% without; see the [build log](06-build-log.md), problem 17). The **🧪 Experiments** card on the Chatbot tab lets you test *why*, by changing one thing at a time. Every experiment is saved in a table, with a verdict and the chance that the difference is just luck (using a statistics check called Fisher's exact test).
+
+| # | Change | What it tests | Time |
+|---|---|---|---|
+| 2 | Turn on the **strict checker** | Does a *clean* notebook help? The strict checker also throws away questions with no question in them, or math using numbers that aren't in the question, so bad examples never get into the notebook. | About 1–2 hours |
+| 3 | Strict checker on, **1 notebook page** | Were the long prompts the problem? The student sees 1 example instead of 3. | About 1–2 hours |
+| 4 | A **bigger model** (1.5B, 3 times bigger) | Does a smarter model use the notebook better? Run `bash setup-llamacpp.sh 1.5b` on the Pi (a 1.1 GB download). When the chatbot notices the new model, it starts a new experiment by itself. It's about 3 times slower, so leave it overnight. To go back: `bash setup-llamacpp.sh 0.5b` | Overnight |
+
+**How to run one:** pick the settings on the Chatbot tab, press **🧪 Start a new experiment with these settings**, and let it practice until both columns have **at least 30 rounds** (60 is better). Starting a new experiment saves the current one and empties the notebook, so each experiment starts fair.
+
 ## Good to know
 - **It's slow:** each round takes about 15–60 seconds on a Pi 4. Let it run for an hour or more to get enough rounds for a fair comparison (at least 30 with and 30 without the notebook).
 - **It uses all 4 processor cores.** Pause the Docking AI while the chatbot practices (`sudo systemctl stop dockingai`), and keep an eye on the Pi's temperature. If the Pi is too busy, the chatbot page warns you. Remember that the Docking AI starts again by itself whenever the Pi restarts.

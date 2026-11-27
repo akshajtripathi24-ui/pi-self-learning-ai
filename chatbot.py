@@ -14,6 +14,7 @@ It's like a student who keeps a notebook of solved problems and reads it before 
 """
 import ast
 import json
+import math
 import operator
 import os
 import random
@@ -101,6 +102,41 @@ def parse_teacher(text):
     return problem, clean_math(m.group(1)), safe_math(m.group(1))
 
 
+NUMBER_WORDS = {"one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "seven": 7, "eight": 8, "nine": 9, "ten": 10,
+                "eleven": 11, "twelve": 12, "fifteen": 15, "twenty": 20, "thirty": 30, "forty": 40, "fifty": 50, "sixty": 60,
+                "hundred": 100, "thousand": 1000, "twice": 2, "double": 2, "half": 2, "triple": 3, "dozen": 12, "pair": 2}
+CONVERSIONS = {2, 7, 12, 24, 60, 100, 365, 1000, 3600}      # days in a week, minutes in an hour, cm in a meter...
+
+
+def makes_sense(problem, math_text):
+    """The strict checker (an experiment setting). The normal checker only checks that the math works out.
+    This one also throws away questions that don't make sense, so they never get into the notebook."""
+    if "?" not in problem:
+        raise ValueError("there's no question in it")
+    low = problem.lower().replace(",", "")
+    have = {float(x) for x in re.findall(r"\d+(?:\.\d+)?", low)}
+    have |= {float(v) for w, v in NUMBER_WORDS.items() if re.search(r"\b%ss?\b" % w, low)}
+    for x in re.findall(r"\d+(?:\.\d+)?", clean_math(math_text)):
+        if float(x) not in have and float(x) not in CONVERSIONS:
+            raise ValueError("the math uses %s, which isn't in the question" % x)
+
+
+def compare(with_, without):
+    """Is the difference between with and without the notebook real, or could it be luck? This works out the
+    exact chance of a gap at least this big if the notebook made no difference at all ("Fisher's exact test")."""
+    (a, n1), (b, n2) = with_, without
+    if min(n1, n2) < 30:
+        return {"verdict": "needs more rounds", "luck": None}
+    right, total = a + b, n1 + n2
+    chance = lambda k: math.comb(n1, k) * math.comb(n2, right - k) / math.comb(total, right)
+    this = chance(a)
+    luck = sum(chance(k) for k in range(max(0, right - n2), min(n1, right) + 1) if chance(k) <= this * (1 + 1e-9))
+    luck = round(min(luck, 1) * 100, 1)                              # % chance of a gap this big by luck alone
+    if luck >= 5:
+        return {"verdict": "no clear difference", "luck": luck}
+    return {"verdict": "the notebook helped" if a / n1 > b / n2 else "the notebook made it worse", "luck": luck}
+
+
 def parse_answer(text):
     m = re.search(r"ANSWER:\s*\$?(-?[\d,]*\.?\d+)", text, re.I)
     nums = [m.group(1)] if m else re.findall(r"-?\d[\d,]*\.?\d*", text)
@@ -125,6 +161,7 @@ class LLM:
     def __init__(self, cfg):
         self.cfg = cfg
         self.speed = None          # how fast it writes, in tokens per second (a token is a piece of a word)
+        self.model_name = None
 
     def _post(self, url, body, timeout=300):
         req = urllib.request.Request(url, data=json.dumps(body).encode(), headers={"Content-Type": "application/json"})
@@ -139,6 +176,7 @@ class LLM:
             if not any(n.split(":")[0] == self.cfg["model"].split(":")[0] and (":" not in self.cfg["model"] or n == self.cfg["model"]) for n in names):
                 return False, "Ollama is running, but the model %s isn't downloaded. Run: ollama pull %s" % (self.cfg["model"], self.cfg["model"])
             self.backend = "ollama"
+            self.model_name = self.cfg["model"]
             return True, "Ollama with %s" % self.cfg["model"]
         except Exception:
             pass
@@ -146,7 +184,13 @@ class LLM:
             with urllib.request.urlopen(self.cfg["llamacpp_url"].rstrip("/") + "/health", timeout=3) as r:
                 r.read()
             self.backend = "llamacpp"
-            return True, "llama.cpp server"
+            try:                                     # which model file the llama.cpp server is running
+                with urllib.request.urlopen(self.cfg["llamacpp_url"].rstrip("/") + "/v1/models", timeout=3) as r:
+                    mid = json.loads(r.read().decode())["data"][0]["id"]
+                self.model_name = os.path.basename(mid).replace(".gguf", "").replace("-instruct", "").replace("-q4_k_m", "")
+            except Exception:
+                self.model_name = "llama.cpp model"
+            return True, "llama.cpp server (%s)" % self.model_name
         except Exception:
             return False, "No language model found. Start Ollama or the llama.cpp server (see docs/03-chatbot.md)."
 
@@ -165,6 +209,9 @@ class LLM:
         return r["choices"][0]["message"]["content"]
 
 
+DEFAULT_SETTINGS = {"pages": 3, "strict": False, "model": None}   # notebook pages shown, strict checker, which model
+
+
 class Chatbot:
     def __init__(self, data_dir, cfg):
         self.file = os.path.join(data_dir, "chatbot.json")
@@ -179,12 +226,39 @@ class Chatbot:
         try:
             with open(self.file) as f:
                 self.state = json.load(f)
+            self.state.setdefault("settings", dict(DEFAULT_SETTINGS))
+            self.state.setdefault("runs", [])
         except (OSError, ValueError):
+            self.state = {}
             self.reset()
 
+    def _fresh(self, settings, runs):
+        return {"rounds": 0, "bad_questions": 0, "with": [0, 0], "without": [0, 0], "notebook": [], "history": [],
+                "settings": settings, "runs": runs, "started": time.time()}
+
+    def _archive(self):
+        """Save the experiment that's finishing into the list of past experiments."""
+        st = self.state
+        if st.get("rounds"):
+            st["runs"].append({"settings": dict(st["settings"]), "rounds": st["rounds"], "bad_questions": st["bad_questions"],
+                               "with": st["with"][:], "without": st["without"][:], "started": st.get("started"),
+                               "ended": time.time()})
+
     def reset(self):
+        """Clear the notebook and scores, but keep the settings and the past experiments."""
         with self.lock:
-            self.state = {"rounds": 0, "bad_questions": 0, "with": [0, 0], "without": [0, 0], "notebook": [], "history": []}
+            self.state = self._fresh(self.state.get("settings", dict(DEFAULT_SETTINGS)), self.state.get("runs", []))
+            self.feed.clear()
+            self._save()
+
+    def new_experiment(self, pages, strict, model=None):
+        """Save the current experiment, then start a new one with an empty notebook and these settings."""
+        with self.lock:
+            self._archive()
+            settings = dict(self.state["settings"], pages=pages, strict=strict)
+            if model:
+                settings["model"] = model
+            self.state = self._fresh(settings, self.state["runs"])
             self.feed.clear()
             self._save()
 
@@ -202,6 +276,8 @@ class Chatbot:
         teacher = self.llm.ask(TEACHER_PROMPT.format(topic=topic), max_tokens=150, temperature=0.9)       # 1. teacher
         try:
             problem, math, truth = parse_teacher(teacher)                                                 # 2. checker
+            if st["settings"].get("strict"):
+                makes_sense(problem, math)
         except ValueError as e:
             with self.lock:
                 st["bad_questions"] += 1
@@ -211,7 +287,8 @@ class Chatbot:
         examples = ""
         if use_notebook:
             examples = "Here are some solved examples from your notebook:\n\n" + "\n\n".join(
-                "PROBLEM: %s\nMATH: %s\nANSWER: %s" % (e["problem"], e["math"], e["answer"]) for e in similar(problem, st["notebook"])) + "\n\n"
+                "PROBLEM: %s\nMATH: %s\nANSWER: %s" % (e["problem"], e["math"], e["answer"])
+                for e in similar(problem, st["notebook"], st["settings"].get("pages", 3))) + "\n\n"
         self.stage, self.stage_since = "student", time.time()
         reply = self.llm.ask(STUDENT_PROMPT.format(examples=examples, problem=problem), max_tokens=180, temperature=0.2)   # 3. student
         answer = parse_answer(reply)
@@ -241,6 +318,15 @@ class Chatbot:
             if not self.connection[0]:
                 time.sleep(10)
                 continue
+            model = self.llm.model_name
+            if model and self.state["settings"].get("model") != model:
+                if self.state["settings"].get("model") is None:          # first time: just note which model this is
+                    with self.lock:
+                        self.state["settings"]["model"] = model
+                        self._save()
+                else:                                                    # you switched models: that's a new experiment
+                    s = self.state["settings"]
+                    self.new_experiment(s.get("pages", 3), s.get("strict", False), model)
             try:
                 self.practice_round()
             except Exception as e:

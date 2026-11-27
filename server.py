@@ -24,7 +24,7 @@ from urllib.parse import parse_qs, urlparse
 
 import collapse
 import selfmath
-from chatbot import Chatbot
+from chatbot import Chatbot, compare
 
 PORT = int(os.environ.get("SELF_PORT", "8100"))      # stock tracker 8000, ISS tracker 8080, docking AI 8090
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -152,7 +152,9 @@ class Lab:
                     "with": st["with"], "without": st["without"], "history": st["history"][-300:], "feed": list(b.feed)[:15],
                     "notebook": st["notebook"][-8:][::-1], "notebook_size": len(st["notebook"]), "model": self.cfg["model"],
                     "stage": b.stage, "stage_seconds": round(time.time() - b.stage_since) if b.stage else None, "speed": b.llm.speed,
-                    "load": round(os.getloadavg()[0], 1), "cores": os.cpu_count() or 4}
+                    "load": round(os.getloadavg()[0], 1), "cores": os.cpu_count() or 4,
+                    "settings": st["settings"], "result": compare(st["with"], st["without"]),
+                    "runs": [dict(r, result=compare(r["with"], r["without"])) for r in st["runs"]]}
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -221,6 +223,10 @@ class Handler(BaseHTTPRequestHandler):
                 lab.save_settings()
                 if lab.bot.running:
                     lab.bot.connection = lab.bot.llm.check()
+                return self._send(200, lab.chatbot_status())
+            if path == "/api/chatbot/experiment":
+                pages = max(1, min(3, int(body.get("pages", 3))))
+                lab.bot.new_experiment(pages, bool(body.get("strict", False)))
                 return self._send(200, lab.chatbot_status())
             if path == "/api/chatbot/reset":
                 lab.bot.reset()

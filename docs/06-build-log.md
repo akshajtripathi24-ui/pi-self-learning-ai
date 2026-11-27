@@ -99,3 +99,8 @@ What happened when it was installed on a real Raspberry Pi 4 (32-bit Pi OS, with
 2. **A small model copies what it just read.** With the notebook, the student sometimes repeated a number from the question or the examples instead of working it out (it answered 50 for "50 stars every minute, how many in 10 minutes?"). Longer prompts can confuse a model this small.
 
 **Lesson:** Showing an AI examples only helps if the examples are right. A checker that checks the math, but not whether the question makes sense, lets bad examples in. This is the same problem as the collapse experiment: an AI learning from unchecked AI writing gets worse.
+
+### 18. Three experiments to find out why
+**Plan:** Result 17 gave two possible reasons, so the chatbot now has experiment settings to test them one at a time: a **strict checker** that keeps bad questions out of the notebook, the number of **notebook pages** shown (1 to 3), and a **bigger model** (Qwen 2.5 1.5B, switched with `bash setup-llamacpp.sh 1.5b`). Every experiment is saved in a table on the Chatbot tab, so they can be compared. The first experiment (27% vs 45%) was kept as experiment 1.
+**Tested:** with a pretend model server: the old result was saved as experiment 1 with the model that produced it, the strict checker threw away "no question" and "numbers not in the question" problems, and switching the model started a new experiment by itself. The bigger model's download hasn't been tested yet (the computer used to build this can't download models).
+**Results:** *will be added here after running them on the Pi.*
