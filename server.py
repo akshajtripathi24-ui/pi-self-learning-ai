@@ -15,6 +15,7 @@ os.environ.setdefault("OMP_NUM_THREADS", "1")
 
 import glob
 import json
+import re
 import multiprocessing
 import signal
 import threading
@@ -22,17 +23,18 @@ import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
+import advmath
 import collapse
 import selfmath
 from chat import Chat
-from chatbot import Chatbot, compare
+from chatbot import KINDS, Chatbot, compare
 
 PORT = int(os.environ.get("SELF_PORT", "8100"))      # stock tracker 8000, ISS tracker 8080, docking AI 8090
 HERE = os.path.dirname(os.path.abspath(__file__))
 DATA = os.path.join(HERE, "data")
 RUNS = os.path.join(DATA, "collapse")
 SETTINGS_FILE = os.path.join(HERE, "config.json")
-DEFAULTS = {"math_paused": False, "chatbot_running": False, "model": "qwen2.5:0.5b", "ollama_url": "http://localhost:11434", "llamacpp_url": "http://localhost:8099"}
+DEFAULTS = {"math_paused": False, "math_course": "auto", "chatbot_running": False, "model": "qwen2.5:0.5b", "ollama_url": "http://localhost:11434", "llamacpp_url": "http://localhost:8099"}
 
 
 def load_settings():
@@ -79,11 +81,12 @@ class Lab:
     def __init__(self, cfg):
         self.cfg = cfg
         os.makedirs(RUNS, exist_ok=True)
-        self.math = selfmath.MathAI(DATA)
-        self.math.paused = cfg["math_paused"]
+        self.math = selfmath.MathAI(DATA)                    # course 1: adding and subtracting
+        self.math2 = advmath.AdvancedMathAI(DATA)            # course 2: multiplying, algebra and calculus
+        self.math.paused = self.math2.paused = cfg["math_paused"]
         self.bot = Chatbot(DATA, cfg)
         self.bot.running = cfg["chatbot_running"]           # keep practicing after the Pi restarts
-        self.chat = Chat(self.bot)                            # part 4: talk to the AI
+        self.chat = Chat(self.bot, tutor=self.math_ai_try)    # part 4: talk to the AI
         self.collapse_proc = None
         self.collapse_path = None
         for path in glob.glob(os.path.join(RUNS, "*.json")):          # runs that were cut off by a restart
@@ -93,11 +96,88 @@ class Lab:
                 r["why"] = "the program restarted (for example after an update or a power cut)"
                 write_json(path, r)
 
+    def math_ask(self, text):
+        """You ask the math AI a question. Adding and subtracting go to course 1, everything else to course 2."""
+        m = re.fullmatch(r"\s*(\d{1,3})\s*([+\-−])\s*(\d{1,3})\s*=?\s*\??\s*", str(text))
+        if m:
+            a, op, b = int(m.group(1)), "-" if m.group(2) in "-−" else "+", int(m.group(3))
+            r = self.math.ask(a, b, op)
+            r.update(question="%d %s %d" % (a, "+" if op == "+" else "−", b), course=1,
+                     tokens=list("%03d" % a) + ["+" if op == "+" else "−"] + list("%03d" % b) + ["="],
+                     rows=["ones", "tens", "hundreds", "thousands"])
+            return r
+        r = self.math2.ask(text)
+        backward = r["question"].count("×") == 1
+        if backward:
+            r["rows"] = ["ones", "tens", "hundreds", "thousands"][:len(r["attention"][0])]
+        return r
+
+    def math_ai_try(self, kind, what):
+        """For the Chat tab: let your trained math AI answer, if it's the kind of question it practices."""
+        text = {"arithmetic": what, "solve": what, "derivative": "d/dx " + what}.get(kind)
+        if not text:
+            return None
+        try:
+            r = self.math_ask(text.replace(" ", ""))
+        except Exception:
+            return None                                       # not something either course practices
+        course = self.math if r["course"] == 1 else self.math2
+        return {"course": r["course"], "question": r["question"], "answer": r["answer"], "truth": r["truth"],
+                "ok": str(r["answer"]) == str(r["truth"]), "level": course.state["level"] + 1,
+                "levels": len(selfmath.LEVELS if r["course"] == 1 else advmath.LEVELS), "mastered": course.state["mastered"]}
+
     def save_settings(self):
         write_json(SETTINGS_FILE, self.cfg)
 
     # ------------------------------------------------------------ part 1
-    def math_status(self):
+    def training(self):
+        """Which course the math AI is learning right now."""
+        mode = self.cfg.get("math_course", "auto")
+        return self.math2 if mode == "2" or (mode == "auto" and self.math.state["mastered"]) else self.math
+
+    def math_loop(self):
+        hot = False
+        while True:
+            temp = selfmath.pi_temperature()
+            if temp is not None:                  # rest if the Pi gets hot, until it's 8 °C cooler
+                hot = temp >= 78 or (hot and temp > 70)
+            self.math.hot = self.math2.hot = hot
+            if self.math.paused or hot:
+                time.sleep(2)
+                continue
+            course = self.training()
+            try:
+                course.round()
+                if time.time() - course.saved_at > 300:
+                    course.save()
+            except Exception as e:
+                print("math training error:", e, flush=True)
+                time.sleep(5)
+
+    def courses(self):
+        out = []
+        for n, c, levels in ((1, self.math, selfmath.LEVELS), (2, self.math2, advmath.LEVELS)):
+            out.append({"n": n, "name": "Course 1: Adding & subtracting" if n == 1 else advmath.AdvancedMathAI.name,
+                        "level": c.state["level"], "levels": len(levels), "mastered": c.state["mastered"],
+                        "training": self.training() is c})
+        return out
+
+    def math_status(self, course=None):
+        course = course or (2 if self.training() is self.math2 else 1)
+        if course == 2:
+            m = self.math2
+            with m.lock:
+                st = m.state
+                hist = st["history"]
+                step = max(1, len(hist) // 400)
+                per = sum(m.speed) / len(m.speed) if m.speed else None
+                return {"course": 2, "courses": self.courses(), "mode": self.cfg.get("math_course", "auto"), "pass": round(advmath.PASS * 100),
+                        "level": st["level"], "levels": [l["name"] for l in advmath.LEVELS], "mastered": st["mastered"], "round": st["round"],
+                        "questions": st["questions"], "notebook": len(st["notebook"]), "tests": st["tests"][-300:],
+                        "history": hist[::step], "level_ups": st["level_ups"], "seconds": round(st["seconds"]),
+                        "paused": m.paused, "hot": m.hot, "temp": selfmath.pi_temperature(), "feed": list(m.feed)[:24],
+                        "skills": m.skill_rows(), "size": m.model.size(),
+                        "per_minute": round(60 / per * (advmath.BATCH + advmath.REVIEW)) if per else None}
         m = self.math
         with m.lock:
             st = m.state
@@ -109,7 +189,8 @@ class Lab:
             hist = st["history"]
             step = max(1, len(hist) // 400)
             per = sum(m.speed) / len(m.speed) if m.speed else None
-            return {"level": lv, "levels": [l["name"] for l in selfmath.LEVELS], "mastered": st["mastered"], "round": st["round"],
+            return {"course": 1, "courses": self.courses(), "mode": self.cfg.get("math_course", "auto"), "pass": round(selfmath.PASS * 100),
+                    "level": lv, "levels": [l["name"] for l in selfmath.LEVELS], "mastered": st["mastered"], "round": st["round"],
                     "questions": st["questions"], "notebook": len(st["notebook"]), "tests": st["tests"][-300:],
                     "history": hist[::step], "level_ups": st["level_ups"], "seconds": round(st["seconds"]),
                     "paused": m.paused, "hot": m.hot, "temp": selfmath.pi_temperature(), "feed": list(m.feed)[:24], "skills": skills, "size": m.model.size(),
@@ -185,7 +266,8 @@ class Handler(BaseHTTPRequestHandler):
                 with open(os.path.join(HERE, "index.html"), "rb") as f:
                     return self._send(200, f.read(), "text/html; charset=utf-8")
             if path == "/api/math":
-                return self._send(200, lab.math_status())
+                c = parse_qs(urlparse(self.path).query).get("course", [""])[0]
+                return self._send(200, lab.math_status(int(c) if c in ("1", "2") else None))
             if path == "/api/collapse":
                 return self._send(200, lab.collapse_status())
             if path == "/api/chatbot":
@@ -204,16 +286,25 @@ class Handler(BaseHTTPRequestHandler):
             n = int(self.headers.get("Content-Length") or 0)
             body = json.loads(self.rfile.read(n) or b"{}") if n else {}
             if path in ("/api/math/pause", "/api/math/resume"):
-                lab.math.paused = lab.cfg["math_paused"] = path.endswith("pause")
+                lab.math.paused = lab.math2.paused = lab.cfg["math_paused"] = path.endswith("pause")
                 lab.save_settings()
                 return self._send(200, {"paused": lab.math.paused})
             if path == "/api/math/reset":
-                lab.math.reset()
-                lab.math.save()
+                course = lab.math2 if body.get("course") == 2 else lab.math
+                course.reset()
+                course.save()
+                return self._send(200, {"ok": True})
+            if path == "/api/math/mode":
+                mode = str(body.get("mode", "auto"))
+                lab.cfg["math_course"] = mode if mode in ("auto", "1", "2") else "auto"
+                lab.save_settings()
                 return self._send(200, {"ok": True})
             if path == "/api/math/ask":
                 try:
-                    return self._send(200, lab.math.ask(int(body.get("a", -1)), int(body.get("b", -1)), str(body.get("op", "+"))))
+                    text = body.get("text")
+                    if text is None:                                  # the old way: two numbers and + or -
+                        text = "%s %s %s" % (body.get("a", ""), body.get("op", "+"), body.get("b", ""))
+                    return self._send(200, lab.math_ask(str(text)[:60]))
                 except ValueError as e:
                     return self._send(400, {"error": str(e)})
             if path == "/api/collapse/start":
@@ -240,7 +331,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(200, lab.chat.status())
             if path == "/api/chatbot/experiment":
                 pages = max(1, min(3, int(body.get("pages", 3))))
-                lab.bot.new_experiment(pages, bool(body.get("strict", False)))
+                topics = [t for t in body.get("topics", []) if t in KINDS] or ["arithmetic"]
+                lab.bot.new_experiment(pages, bool(body.get("strict", False)), topics=topics)
                 return self._send(200, lab.chatbot_status())
             if path == "/api/chatbot/reset":
                 lab.bot.reset()
@@ -270,13 +362,14 @@ def main():
     def stop(*_):
         def finish():
             lab.math.save()
+            lab.math2.save()
             lab.stop_collapse("the program restarted (for example after an update)")
             print("saved. bye!", flush=True)
             os._exit(0)
         threading.Thread(target=finish, daemon=True).start()
     signal.signal(signal.SIGTERM, stop)
     signal.signal(signal.SIGINT, stop)
-    threading.Thread(target=lab.math.run, daemon=True).start()
+    threading.Thread(target=lab.math_loop, daemon=True).start()
     threading.Thread(target=lab.bot.run, daemon=True).start()
     server = ThreadingHTTPServer(("0.0.0.0", PORT), Handler)
     print(time.strftime("%Y-%m-%d %H:%M:%S"), "Pi Self-Learning AI running on port", PORT, flush=True)

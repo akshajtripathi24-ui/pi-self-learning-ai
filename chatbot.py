@@ -22,7 +22,10 @@ import re
 import threading
 import time
 import urllib.request
+from fractions import Fraction
 from collections import deque
+
+import mathengine
 
 TOPICS = ["a Mars rover", "astronauts on the space station", "a rocket launch", "satellites", "the Moon", "a robot arm",
           "solar panels", "a space telescope", "a robot car", "planets", "a drone", "a moon base", "a robot factory",
@@ -43,6 +46,35 @@ STUDENT_PROMPT = """{examples}Solve this math word problem. Think in one or two 
 ANSWER: <just the number>
 
 PROBLEM: {problem}"""
+
+ALGEBRA_PROMPT = """Write one short "solve for x" word problem for a high school student about {topic}.
+Use small whole numbers, and choose them so x is a whole number.
+Then write the equation that solves it, using x. Don't write the answer.
+Use exactly this format, like this example:
+PROBLEM: A robot arm lifts the same number of boxes every minute. After 3 minutes it has lifted 5 boxes fewer than 20. How many boxes does it lift each minute?
+EQUATION: 3x + 5 = 20
+
+Now write a new one about {topic}.
+PROBLEM: <the word problem>
+EQUATION: <the equation>"""
+
+CALCULUS_PROMPT = """Write one short calculus question for a high school student about {topic}.
+It asks for the derivative of a polynomial in x, with whole-number coefficients and powers up to 4.
+Use exactly this format, like this example:
+PROBLEM: A rover's distance in meters after x seconds is 3x^2 + 2x. What is the derivative of its distance?
+FUNCTION: 3x^2 + 2x
+
+Now write a new one about {topic}.
+PROBLEM: <the question>
+FUNCTION: <the polynomial>"""
+
+CALCULUS_STUDENT = """{examples}Find the derivative this question asks for. Think in one or two short steps, then finish with the line
+ANSWER: <just the derivative, like 6x + 2>
+
+PROBLEM: {problem}"""
+
+KINDS = ("arithmetic", "algebra", "calculus")       # the kinds of question the teacher can write
+
 
 OPS = {ast.Add: operator.add, ast.Sub: operator.sub, ast.Mult: operator.mul, ast.Div: operator.truediv}
 
@@ -109,7 +141,7 @@ NUMBER_WORDS = {"one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6, 
 CONVERSIONS = {2, 7, 12, 24, 60, 100, 365, 1000, 3600}      # days in a week, minutes in an hour, cm in a meter...
 
 
-def makes_sense(problem, math_text):
+def makes_sense(problem, math_text, kind="arithmetic"):
     """The strict checker (an experiment setting). The normal checker only checks that the math works out.
     This one also throws away questions that don't make sense, so they never get into the notebook."""
     if "?" not in problem:
@@ -117,7 +149,8 @@ def makes_sense(problem, math_text):
     low = problem.lower().replace(",", "")
     have = {float(x) for x in re.findall(r"\d+(?:\.\d+)?", low)}
     have |= {float(v) for w, v in NUMBER_WORDS.items() if re.search(r"\b%ss?\b" % w, low)}
-    for x in re.findall(r"\d+(?:\.\d+)?", clean_math(math_text)):
+    numbers = clean_math(math_text) if kind == "arithmetic" else re.sub(r"\^\d+", "", math_text)   # (powers don't count)
+    for x in re.findall(r"\d+(?:\.\d+)?", numbers):
         if float(x) not in have and float(x) not in CONVERSIONS:
             raise ValueError("the math uses %s, which isn't in the question" % x)
 
@@ -136,6 +169,56 @@ def compare(with_, without):
     if luck >= 5:
         return {"verdict": "no clear difference", "luck": luck}
     return {"verdict": "the notebook helped" if a / n1 > b / n2 else "the notebook made it worse", "luck": luck}
+
+
+def parse_kind(text, kind):
+    """The checker, for every kind of question. Returns (problem, math, true answer, what the checker worked out)."""
+    if kind == "arithmetic":
+        problem, math_text, truth = parse_teacher(text)
+        return problem, math_text, truth, "%s = %s" % (math_text, truth)
+    text = text.replace("**", "").replace("__", "")
+    label = "EQUATION" if kind == "algebra" else "FUNCTION"
+    p = re.search(r"PROBLEM:\s*(.+?)\s*(?:\n|%s:)" % label, text, re.S | re.I)
+    m = re.search(r"%s:\s*([^\n]+)" % label, text, re.I)
+    if not p or not m:
+        raise ValueError("didn't follow the format")
+    problem = " ".join(p.group(1).split())
+    if len(problem) < 20:
+        raise ValueError("the problem is too short")
+    expr = m.group(1).strip().strip("`$ .").replace("×", "*")
+    if kind == "algebra":
+        if "x" not in expr or expr.count("=") != 1:
+            raise ValueError("the equation needs an x and one =")
+        try:
+            xs = mathengine.solve(expr)
+        except mathengine.MathError as e:
+            raise ValueError("the equation can't be solved (%s)" % e)
+        if len(xs) != 1 or not isinstance(xs[0], Fraction) or xs[0].denominator != 1 or abs(xs[0]) > 10 ** 6:
+            raise ValueError("x isn't one whole number")
+        return problem, expr, int(xs[0]), "%s, so x = %d" % (expr, xs[0])
+    expr = re.sub(r"^[a-z]\s*\(\s*x\s*\)\s*=", "", expr).strip()          # "f(x) = 3x^2" -> "3x^2"
+    try:
+        poly = mathengine.parse(expr)
+    except mathengine.MathError as e:
+        raise ValueError("the function can't be read (%s)" % e)
+    if not 1 <= poly.degree() <= 5 or any(c.denominator != 1 for c in poly.t.values()):
+        raise ValueError("it isn't a simple polynomial")
+    return problem, str(poly), str(poly.derivative()), "d/dx (%s) = %s" % (poly, poly.derivative())
+
+
+def check_answer(kind, reply, truth):
+    """Mark the student's answer. Derivatives are compared as math, so 2x + 6x^2 counts the same as 6x^2 + 2x."""
+    if kind != "calculus":
+        answer = parse_answer(reply)
+        return answer, answer is not None and abs(answer - truth) < 1e-9
+    m = re.search(r"ANSWER:\s*([^\n]+)", reply, re.I)
+    text = (m.group(1) if m else reply.strip().split("\n")[-1]).strip().strip("`$ .")
+    text = re.sub(r"^.*=", "", text).strip()                                 # "f'(x) = 6x + 2" -> "6x + 2"
+    try:
+        got = mathengine.parse(text)
+    except mathengine.MathError:
+        return text[:40] or None, False
+    return str(got), got == mathengine.parse(truth)
 
 
 def parse_answer(text):
@@ -223,7 +306,7 @@ class LLM:
         return r["choices"][0]["message"]["content"]
 
 
-DEFAULT_SETTINGS = {"pages": 3, "strict": False, "model": None}   # notebook pages shown, strict checker, which model
+DEFAULT_SETTINGS = {"pages": 3, "strict": False, "model": None, "topics": ["arithmetic"]}   # what each experiment changes
 
 
 class Chatbot:
@@ -243,13 +326,15 @@ class Chatbot:
                 self.state = json.load(f)
             self.state.setdefault("settings", dict(DEFAULT_SETTINGS))
             self.state.setdefault("runs", [])
+            self.state.setdefault("solved", [])
+            self.state["settings"].setdefault("topics", ["arithmetic"])
         except (OSError, ValueError):
             self.state = {}
             self.reset()
 
-    def _fresh(self, settings, runs):
+    def _fresh(self, settings, runs, solved=None):
         return {"rounds": 0, "bad_questions": 0, "with": [0, 0], "without": [0, 0], "notebook": [], "history": [],
-                "settings": settings, "runs": runs, "started": time.time()}
+                "settings": settings, "runs": runs, "started": time.time(), "solved": solved or []}
 
     def _archive(self):
         """Save the experiment that's finishing into the list of past experiments."""
@@ -262,18 +347,21 @@ class Chatbot:
     def reset(self):
         """Clear the notebook and scores, but keep the settings and the past experiments."""
         with self.lock:
-            self.state = self._fresh(self.state.get("settings", dict(DEFAULT_SETTINGS)), self.state.get("runs", []))
+            self.state = self._fresh(self.state.get("settings", dict(DEFAULT_SETTINGS)), self.state.get("runs", []),
+                                     self.state.get("solved", []))
             self.feed.clear()
             self._save()
 
-    def new_experiment(self, pages, strict, model=None):
+    def new_experiment(self, pages, strict, model=None, topics=None):
         """Save the current experiment, then start a new one with an empty notebook and these settings."""
         with self.lock:
             self._archive()
             settings = dict(self.state["settings"], pages=pages, strict=strict)
             if model:
                 settings["model"] = model
-            self.state = self._fresh(settings, self.state["runs"])
+            if topics:
+                settings["topics"] = topics
+            self.state = self._fresh(settings, self.state["runs"], self.state.get("solved", []))
             self.feed.clear()
             self._save()
 
@@ -286,42 +374,48 @@ class Chatbot:
     def practice_round(self):
         st = self.state
         topic = self.rng.choice(TOPICS)
+        kind = self.rng.choice([k for k in st["settings"].get("topics", ["arithmetic"]) if k in KINDS] or ["arithmetic"])
         t0 = time.time()
         self.stage, self.stage_since = "teacher", time.time()
-        teacher = self.llm.ask(TEACHER_PROMPT.format(topic=topic), max_tokens=150, temperature=0.9)       # 1. teacher
+        prompt = {"arithmetic": TEACHER_PROMPT, "algebra": ALGEBRA_PROMPT, "calculus": CALCULUS_PROMPT}[kind]
+        teacher = self.llm.ask(prompt.format(topic=topic), max_tokens=170, temperature=0.9)                # 1. teacher
         try:
-            problem, math, truth = parse_teacher(teacher)                                                 # 2. checker
+            problem, math_text, truth, worked = parse_kind(teacher, kind)                                  # 2. checker
             if st["settings"].get("strict"):
-                makes_sense(problem, math)
+                makes_sense(problem, math_text, kind)
         except ValueError as e:
             with self.lock:
                 st["bad_questions"] += 1
-                self.feed.appendleft({"kind": "bad", "topic": topic, "why": str(e), "text": teacher.strip()[:300]})
+                self.feed.appendleft({"kind": "bad", "topic": topic, "type": kind, "why": str(e), "text": teacher.strip()[:300]})
             return
         use_notebook = st["rounds"] % 2 == 0 and len(st["notebook"]) >= 3                                 # half with, half without
         examples = ""
         if use_notebook:
+            pages = [e for e in st["notebook"] if e.get("kind", "arithmetic") == kind] or st["notebook"]
             examples = "Here are some solved examples from your notebook:\n\n" + "\n\n".join(
                 "PROBLEM: %s\nMATH: %s\nANSWER: %s" % (e["problem"], e["math"], e["answer"])
-                for e in similar(problem, st["notebook"], st["settings"].get("pages", 3))) + "\n\n"
+                for e in similar(problem, pages, st["settings"].get("pages", 3))) + "\n\n"
         self.stage, self.stage_since = "student", time.time()
-        reply = self.llm.ask(STUDENT_PROMPT.format(examples=examples, problem=problem), max_tokens=180, temperature=0.2)   # 3. student
-        answer = parse_answer(reply)
-        ok = answer is not None and abs(answer - truth) < 1e-9
+        ask = CALCULUS_STUDENT if kind == "calculus" else STUDENT_PROMPT
+        reply = self.llm.ask(ask.format(examples=examples, problem=problem), max_tokens=200, temperature=0.2)  # 3. student
+        answer, ok = check_answer(kind, reply, truth)
         with self.lock:
             key = "with" if use_notebook else "without"
             if len(st["notebook"]) >= 3:            # (only count fair comparisons, once the notebook has pages)
                 st[key][0] += ok
                 st[key][1] += 1
+            page = {"problem": problem, "math": math_text, "answer": truth, "kind": kind}
             if not ok:                                                                                     # 4. notebook
-                st["notebook"].append({"problem": problem, "math": math, "answer": truth})
+                st["notebook"].append(page)
                 st["notebook"] = st["notebook"][-200:]
+            else:                                   # checked twice (Python and the student agree): good for the Chat tab
+                st["solved"] = (st.get("solved", []) + [page])[-300:]
             st["rounds"] += 1
             if st["rounds"] % 5 == 0:
                 st["history"].append([st["rounds"], st["with"][:], st["without"][:]])
-            self.feed.appendleft({"kind": "quiz", "topic": topic, "problem": problem, "math": math, "truth": truth,
-                                  "answer": answer, "ok": ok, "notebook": use_notebook, "reply": reply.strip()[-400:],
-                                  "seconds": round(time.time() - t0)})
+            self.feed.appendleft({"kind": "quiz", "topic": topic, "type": kind, "problem": problem, "math": math_text,
+                                  "truth": truth, "check": worked, "answer": answer, "ok": ok, "notebook": use_notebook,
+                                  "reply": reply.strip()[-400:], "seconds": round(time.time() - t0)})
             self._save()
 
     def run(self):
@@ -341,7 +435,7 @@ class Chatbot:
                         self._save()
                 else:                                                    # you switched models: that's a new experiment
                     s = self.state["settings"]
-                    self.new_experiment(s.get("pages", 3), s.get("strict", False), model)
+                    self.new_experiment(s.get("pages", 3), s.get("strict", False), model, s.get("topics"))
             try:
                 self.practice_round()
             except Exception as e:

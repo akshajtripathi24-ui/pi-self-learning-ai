@@ -130,3 +130,29 @@ With the strict checker keeping bad examples out, the big gap (about 23% vs 46%)
 **Fix:** A safety check compares the fix with what you typed, and keeps what you typed if the fix doesn't look like a fix. The first version only compared the letters, and it let "…is Jupiter." through, because that sentence uses mostly the same words. It now also checks that the AI didn't add any sentence that isn't a question, and didn't bring in many new words.
 **Another bug found while testing:** "What is the biggest planet? It's Jupiter." still got through, because the check thought "It's" was the question word "is" spelled wrong. Short question words (is, do, can, how…) now have to match exactly; only longer ones can be misspelled ("wat" for "what").
 **Tested:** 16 typical fixes, all handled correctly, plus the whole chat with a pretend model server.
+
+### 22. Harder math: course 2 needed a new brain
+**Goal:** Teach the math AI harder math: multiplying, algebra (solve for x) and calculus (derivatives).
+**Problem:** The math AI's brain can only read and write the 14 symbols it was built with (`0`–`9`, `+`, `-`, `=`, `.`), and questions exactly 8 symbols long. Algebra and calculus need `x`, `^`, `*` and `d/dx`, and longer questions. You can't add new symbols to a trained brain without starting it over.
+**Fix:** Course 2 is a **second, separate brain** (`advmath.py`) with 20 symbols and room for questions up to 16 symbols long, like `d/dx 9x^4-9x^3=`. Course 1's progress is kept, and course 2 starts by itself once course 1 is mastered (or straight away, with **What it trains → Course 2 now**).
+**Checking the checker:** before training, every answer the course writes was checked against the math engine (problem 23): 21,000 questions across all 7 levels, 0 wrong.
+**Tested:** a training run on the build computer: level 1 (multiplying 1-digit numbers) passed after 200 rounds, level 2 after about 2,300, level 3 (solve x + b = c) after about 5,200, and level 4 (solve ax + b = c) had reached 87% at 6,500 rounds. So the tiny brain really can teach itself algebra. The calculus levels haven't been tested yet: results will be added here.
+
+### 23. A math engine that never runs text as code
+**Goal:** Check algebra and calculus, both in the chatbot's practice questions and in the Chat tab.
+**Problem:** Python's usual shortcut for working out math from text, `eval`, runs the text as a program. With text written by an AI (or typed by anyone), that could run something harmful. A ready-made math library (SymPy) also uses `eval` inside, and would need installing.
+**Fix:** `mathengine.py` reads the math one symbol at a time and refuses anything that isn't numbers, `x`, `+ - * / ^` and brackets. It knows polynomials (like `3x^2 - 4x + 1`, `(x+2)(x-3)` or `2(x+1)^2`), keeps every number as an exact fraction, and can solve equations up to x², take derivatives and integrals, and do plain arithmetic. Tested on 8 equations, derivatives, integrals and 8 kinds of bad input (like `__import__('os')`, `1/0`, `2^x` and a 200-digit number), which it all refused safely.
+
+### 24. Connecting everything to the Chat tab
+**Goal:** Make the training help the Chat tab.
+**What's possible on a Pi 4:** the chat AI (Qwen, 500 million numbers) can't be retrained on a Pi 4 (see [3. The chatbot](03-chatbot.md)), so its brain stays the same. Three things do carry over:
+1. **The math engine** works out any arithmetic, algebra or calculus in your question exactly, and tells Qwen the answer.
+2. **Your trained math AI answers too**, when the question is something one of its courses practices. The chat shows its answer with ✅ or ❌, and its level.
+3. **Checked practice problems:** every practice problem the chatbot gets right (Python and the AI agree) is saved, and the chat shows up to 2 similar ones to Qwen as examples for word problems.
+
+**Problems found while testing:**
+- **"x" can mean *times* or the letter x.** In "5 x 4" it's times, and in "3x + 5 = 20" it's a letter. Now: if the question looks like algebra or calculus (an `=`, "derivative", "solve", `x^`, or a number stuck to an x like `3x`), x is the letter; otherwise "5 x 4" means times.
+- **The math AI was asked things it never practiced,** like 47 × 38 (course 2 only practices multiplying by a 1-digit number), and gave nonsense. Now it only answers questions inside what its courses practice, and says which level it's on.
+- **Algebra questions looked messy** on the Math AI tab ("x-2 = 2, x"). They now read "x − 2 = 2, x = 4".
+
+**Tested:** with a pretend model server: course 2 training and its feed, asking both courses, algebra and calculus practice (checked by the engine), and the chat using the engine, the math AI and checked examples.

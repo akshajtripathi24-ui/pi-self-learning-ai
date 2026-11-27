@@ -89,6 +89,7 @@ footer{text-align:center;color:var(--muted);font-size:12px;padding:20px}footer a
   </section>
   <section class="card">
     <h2>Progress</h2>
+    <div class="bar" id="mcourses" style="margin-top:0"></div>
     <div class="muted">Level <b id="mlvlnum" style="color:var(--text)">-</b></div>
     <div class="big" id="mlvlname" style="font-size:22px">-</div>
     <div class="levels" id="mlvlbar"></div>
@@ -100,11 +101,13 @@ footer{text-align:center;color:var(--muted);font-size:12px;padding:20px}footer a
       <div class="stat"><div class="k">Speed</div><div class="v" id="mspeed">-</div></div>
       <div class="stat"><div class="k">Brain size</div><div class="v" id="msize">-</div></div>
     </div>
-    <div class="bar"><button class="ghost small" id="mpause">⏸️ Pause</button><button class="ghost small" id="mreset">⚠️ Start over</button></div>
+    <label for="mmode">What it trains</label>
+    <select id="mmode"><option value="auto">Automatic: course 2 after course 1</option><option value="1">Course 1 only</option><option value="2">Course 2 now</option></select>
+    <div class="bar"><button class="ghost small" id="mpause">⏸️ Pause</button><button class="ghost small" id="mreset">⚠️ Start this course over</button></div>
   </section>
   <section class="card full">
     <h2>📈 Test scores</h2>
-    <div class="legend"><span><i style="background:var(--s1)"></i>Score on a test of 300 new questions</span><span><i style="background:#64748b"></i>97% needed to level up</span></div>
+    <div class="legend"><span><i style="background:var(--s1)"></i>Score on a test of 300 new questions</span><span><i style="background:#64748b"></i><span id="mpass">97</span>% needed to level up</span></div>
     <div class="chart" id="mchart"></div>
   </section>
   <section class="card">
@@ -114,10 +117,8 @@ footer{text-align:center;color:var(--muted);font-size:12px;padding:20px}footer a
   </section>
   <section class="card">
     <h2>🙋 Ask it a question</h2>
-    <div class="row"><div><input type="number" id="qa" min="0" max="999" value="47" aria-label="First number"></div>
-      <div style="flex:0 0 70px"><select id="qop" aria-label="Plus or minus"><option value="+">+</option><option value="-">−</option></select></div>
-      <div><input type="number" id="qb" min="0" max="999" value="38" aria-label="Second number"></div></div>
-    <button id="qgo" style="margin-top:10px">Ask</button>
+    <p class="muted" style="margin-top:0">Course 1: <code>47+38</code>, <code>500-123</code>. Course 2: <code>7*8</code>, <code>47*8</code>, <code>3x+5=20</code>, <code>d/dx 4x^3</code>, <code>d/dx 3x^2-5x</code></p>
+    <div class="row"><div><input type="text" id="qtext" value="47+38" aria-label="Your question"></div><div style="flex:0 0 auto"><button id="qgo">Ask</button></div></div>
     <div id="qout" class="msg"></div>
   </section>
 </main>
@@ -156,6 +157,12 @@ footer{text-align:center;color:var(--muted);font-size:12px;padding:20px}footer a
       <div style="max-width:320px"><label for="xpages">Notebook pages shown to the student</label><select id="xpages"><option value="1">1 page</option><option value="2">2 pages</option><option value="3">3 pages</option></select></div>
     </div>
     <div class="check"><input type="checkbox" id="xstrict"><label for="xstrict" style="margin:0">Strict checker: also throw away questions that don't make sense (no question in them, or math with numbers that aren't in the question)</label></div>
+    <label>Kinds of question</label>
+    <div class="bar" style="margin-top:0">
+      <div class="check"><input type="checkbox" id="xt-arithmetic" class="xtopic" value="arithmetic"><label for="xt-arithmetic" style="margin:0">Arithmetic (12 × 5)</label></div>
+      <div class="check"><input type="checkbox" id="xt-algebra" class="xtopic" value="algebra"><label for="xt-algebra" style="margin:0">Algebra (solve for x)</label></div>
+      <div class="check"><input type="checkbox" id="xt-calculus" class="xtopic" value="calculus"><label for="xt-calculus" style="margin:0">Calculus (derivatives)</label></div>
+    </div>
     <div class="bar"><button id="xstart">🧪 Start a new experiment with these settings</button></div>
     <p class="muted" style="font-size:12px">Starting a new experiment saves this one and empties the notebook. To try the bigger model, run <code>bash setup-llamacpp.sh 1.5b</code> on the Pi: when it finds a different model, it starts a new experiment by itself.</p>
     <div id="xruns"></div>
@@ -170,7 +177,7 @@ footer{text-align:center;color:var(--muted);font-size:12px;padding:20px}footer a
 <main id="page-chat" class="hide">
   <section class="card full">
     <h2>🗨️ Talk to the AI</h2>
-    <p class="muted" style="margin-top:0">Ask anything, even with spelling mistakes. It fixes your message first ✏️, answers each question separately if you ask more than one, and has Python check any math 🧮 so it can't get the numbers wrong. It's the same small AI as the Chatbot tab (<b id="chatmodel">not connected yet</b>), so it can still be wrong about facts. The Chatbot practice pauses while you chat.</p>
+    <p class="muted" style="margin-top:0">Ask anything, even with spelling mistakes. It fixes your message first ✏️, answers each question separately if you ask more than one, and a math engine 🧮 works out any arithmetic, algebra (solve for x) or calculus (derivatives, integrals) exactly, so it can't get the math wrong. Your trained math AI 🧠 has a go too, and checked practice problems 📒 help with word problems. It's the same small AI as the Chatbot tab (<b id="chatmodel">not connected yet</b>), so it can still be wrong about facts. The Chatbot practice pauses while you chat.</p>
     <div id="chatlog" class="chatlog"></div>
     <p class="muted" id="chatstage" style="min-height:20px;margin:8px 0 0"></p>
     <div class="chatbox"><textarea id="chatin" rows="2" placeholder="Ask anything… (Enter to send, Shift + Enter for a new line)"></textarea><button id="chatsend">Send</button></div>
@@ -264,9 +271,14 @@ function lineChart(box, series, o) {
 
 // ---------------------------------------------------------------- part 1
 let math = null;
+let mcourse = null;                    // which course you're looking at (null = the one it's training)
 async function loadMath() {
-  try { math = await api('/api/math'); } catch (e) { return; }
+  try { math = await api('/api/math' + (mcourse ? '?course=' + mcourse : '')); } catch (e) { return; }
   const m = math;
+  $('mcourses').innerHTML = m.courses.map(c => `<button class="${c.n === m.course ? '' : 'ghost'} small" data-course="${c.n}">${esc(c.name)} · ${c.mastered ? '🏆' : 'level ' + (c.level + 1) + '/' + c.levels}${c.training ? ' · 🏋️ training' : ''}</button>`).join('');
+  document.querySelectorAll('#mcourses button').forEach(btn => btn.onclick = () => { mcourse = +btn.dataset.course; loadMath(); });
+  if (document.activeElement !== $('mmode')) $('mmode').value = m.mode;
+  $('mpass').textContent = m.pass;
   $('mlvlnum').textContent = `${m.level + 1} of ${m.levels.length}`;
   $('mlvlname').textContent = m.mastered ? '🏆 Mastered everything!' : m.levels[m.level];
   $('mlvlbar').innerHTML = m.levels.map((n, i) => `<span class="${i < m.level || m.mastered ? 'done' : i === m.level ? 'now' : ''}" title="Level ${i + 1}: ${esc(n)}"></span>`).join('');
@@ -281,24 +293,29 @@ async function loadMath() {
   $('feed').innerHTML = m.feed.map(f => `<li><span>${f.review ? '📒 ' : ''}${esc(f.q)} = ${f.answer == null ? '?' : f.answer}</span><span class="${f.ok ? 'ok' : 'no'}">${f.ok ? '✅' : '❌ <span class="r">(it\'s ' + f.truth + ')</span>'}</span></li>`).join('') || '<li class="muted">Starting…</li>';
   $('skills').innerHTML = m.skills.map(s => `<div class="skill"><span>${esc(s.label)}</span><div class="track"><div class="fill" style="width:${s.acc}%"></div></div><b>${s.acc}%</b></div>`).join('');
   lineChart($('mchart'), [{name: 'Test score', color: '#3987e5', points: m.tests.map(t => [t[0], t[2]])}],
-    {yMax: 100, yTick: 25, ySuffix: '%', ref: 97, xName: 'Round', label: 'Test scores', markers: m.level_ups.map(u => [u[0], 'L' + (u[1] + 1)]), empty: 'The first test is after 100 rounds.'});
+    {yMax: 100, yTick: 25, ySuffix: '%', ref: m.pass, xName: 'Round', label: 'Test scores', markers: m.level_ups.map(u => [u[0], 'L' + (u[1] + 1)]), empty: 'The first test is after 100 rounds.'});
 }
 $('mpause').onclick = async () => { await post(math && math.paused ? '/api/math/resume' : '/api/math/pause'); loadMath(); };
-$('mreset').onclick = async () => { if (confirm('Start over with a brand-new math AI that knows nothing? Everything it learned will be erased.')) { await post('/api/math/reset'); loadMath(); } };
+$('mreset').onclick = async () => {
+  const name = math ? math.courses[math.course - 1].name : 'this course';
+  if (confirm(`Start ${name} over with a brand-new brain that knows nothing? Everything it learned in this course will be erased.`)) { await post('/api/math/reset', {course: math.course}); loadMath(); }
+};
+$('mmode').onchange = async () => { await post('/api/math/mode', {mode: $('mmode').value}); mcourse = null; loadMath(); };
 $('qgo').onclick = async () => {
-  const a = +$('qa').value, b = +$('qb').value, op = $('qop').value;
+  const text = $('qtext').value.trim();
+  if (!text) return;
   try {
-    const r = await post('/api/math/ask', {a, b, op});
-    const toks = ('00' + a).slice(-3).split('').concat([op === '+' ? '+' : '−']).concat(('00' + b).slice(-3).split('')).concat(['=']);
-    const att = r.attention[r.attention.length - 1];      // the last layer: which question digits it looked at
-    const rows = ['ones', 'tens', 'hundreds', 'thousands'];
-    $('qout').innerHTML = `<div style="font-size:22px;font-weight:800;margin:6px 0">${a} ${op === '+' ? '+' : '−'} ${b} = ${r.answer == null ? '?' : r.answer} <span class="${r.answer === r.truth ? 'ok' : 'no'}">${r.answer === r.truth ? '✅' : '❌ (it\'s ' + r.truth + ')'}</span></div>
-      <div class="muted">Where it "looked" while writing each digit of the answer (its attention):</div>
-      <table class="heat"><tr><th></th>${toks.map(t => `<th>${t}</th>`).join('')}</tr>` +
-      att.map((row, i) => `<tr><th style="width:auto;padding-right:6px;text-align:right">${rows[i]}</th>${row.map(v => `<td style="background:rgba(57,135,229,${Math.min(1, v * 2.2).toFixed(2)})"></td>`).join('')}</tr>`).join('') + '</table>' +
-      '<div class="muted" style="font-size:12px;margin-top:6px">Brighter = looked more. A good math AI looks at the matching digits (ones at the ones), like you do!</div>';
+    const r = await post('/api/math/ask', {text});
+    const att = r.attention[r.attention.length - 1];      // the last layer: which parts of the question it looked at
+    const ok = r.answer === r.truth || String(r.answer) === String(r.truth);
+    $('qout').innerHTML = `<div class="muted">Answered by course ${r.course}</div><div style="font-size:22px;font-weight:800;margin:6px 0">${esc(r.question)} = ${r.answer == null ? '?' : esc(r.answer)} <span class="${ok ? 'ok' : 'no'}">${ok ? '✅' : '❌ (it\'s ' + esc(r.truth) + ')'}</span></div>
+      <div class="muted">Where it "looked" while writing each part of the answer (its attention):</div>
+      <table class="heat"><tr><th></th>${r.tokens.map(t => `<th>${esc(t)}</th>`).join('')}</tr>` +
+      att.map((row, i) => `<tr><th style="width:auto;padding-right:6px;text-align:right">${esc(r.rows[i] || '')}</th>${row.map(v => `<td style="background:rgba(57,135,229,${Math.min(1, v * 2.2).toFixed(2)})"></td>`).join('')}</tr>`).join('') + '</table>' +
+      '<div class="muted" style="font-size:12px;margin-top:6px">Brighter = looked more. For adding, a good math AI looks at the matching digits (ones at the ones), like you do!</div>';
   } catch (e) { $('qout').textContent = '❌ ' + e.message; }
 };
+$('qtext').addEventListener('keydown', e => { if (e.key === 'Enter') $('qgo').click(); });
 
 // ---------------------------------------------------------------- part 2
 let bot = null;
@@ -312,11 +329,14 @@ async function loadBot() {
   $('bwithout').textContent = pct(b.without); $('bwithoutn').textContent = b.without[1] ? `${b.without[0]} of ${b.without[1]} right` : '';
   $('brounds').textContent = b.rounds.toLocaleString(); $('bbad').textContent = b.bad_questions.toLocaleString();
   $('bverdict').textContent = verdictText(b.result);
-  if (!xdirty) { $('xpages').value = b.settings.pages; $('xstrict').checked = !!b.settings.strict; }   // don't undo what you just changed
-  const runRow = (r, i, live) => `<tr${live ? ' style="font-weight:700"' : ''}><td>${live ? 'Now' : i + 1}</td><td>${esc(r.settings.model || '?')}</td><td>${r.settings.pages || 3}</td><td>${r.settings.strict ? 'on' : 'off'}</td>
+  if (!xdirty) {                                         // don't undo what you just changed
+    $('xpages').value = b.settings.pages; $('xstrict').checked = !!b.settings.strict;
+    document.querySelectorAll('.xtopic').forEach(c => c.checked = (b.settings.topics || ['arithmetic']).includes(c.value));
+  }
+  const runRow = (r, i, live) => `<tr${live ? ' style="font-weight:700"' : ''}><td>${live ? 'Now' : i + 1}</td><td>${esc(r.settings.model || '?')}</td><td>${esc((r.settings.topics || ['arithmetic']).join(', '))}</td><td>${r.settings.pages || 3}</td><td>${r.settings.strict ? 'on' : 'off'}</td>
     <td>${pct(r.with)} <span class="muted">(${r.with[0]}/${r.with[1]})</span></td><td>${pct(r.without)} <span class="muted">(${r.without[0]}/${r.without[1]})</span></td>
     <td>${r.bad_questions} of ${r.rounds + r.bad_questions}</td><td>${esc(r.result.verdict)}${r.result.luck != null ? ` <span class="muted">(${r.result.luck}% chance it's luck)</span>` : ''}</td></tr>`;
-  $('xruns').innerHTML = '<table class="t"><tr><th>#</th><th>Model</th><th>Pages</th><th>Strict</th><th>📒 With</th><th>Without</th><th>Thrown away</th><th>Result</th></tr>' +
+  $('xruns').innerHTML = '<table class="t"><tr><th>#</th><th>Model</th><th>Topics</th><th>Pages</th><th>Strict</th><th>📒 With</th><th>Without</th><th>Thrown away</th><th>Result</th></tr>' +
     b.runs.map((r, i) => runRow(r, i, false)).join('') + runRow(b, 0, true) + '</table>';
   if (document.activeElement !== $('bmodel')) $('bmodel').value = b.model;
   const speed = b.speed ? ` · Speed: ${b.speed} tokens a second (a token is a piece of a word)` : '';
@@ -326,7 +346,7 @@ async function loadBot() {
   $('bfeed').innerHTML = b.feed.map(f => f.kind === 'bad'
     ? `<div class="qa"><details><summary class="m">🗑️ Threw away a bad question about ${esc(f.topic)} (${esc(f.why)}). Click to see what it wrote</summary><pre class="m" style="white-space:pre-wrap">${esc(f.text || '')}</pre></details></div>`
     : f.kind === 'error' ? `<div class="qa"><div class="m">⚠️ Problem talking to the model: ${esc(f.why)}</div></div>`
-    : `<div class="qa"><div class="p">${f.notebook ? '📒 ' : ''}${esc(f.problem)}</div><div class="m">Checker: ${esc(f.math)} = <b>${f.truth}</b> · AI answered <b>${f.answer == null ? '?' : f.answer}</b> <span class="${f.ok ? 'ok' : 'no'}">${f.ok ? '✅' : '❌'}</span> · ${f.seconds} s</div></div>`).join('')
+    : `<div class="qa"><div class="p">${f.notebook ? '📒 ' : ''}${f.type && f.type !== 'arithmetic' ? `<span class="pill" style="font-size:11px;padding:1px 7px">${esc(f.type)}</span> ` : ''}${esc(f.problem)}</div><div class="m">Checker: ${esc(f.check || (f.math + ' = ' + f.truth))} · AI answered <b>${f.answer == null ? '?' : esc(f.answer)}</b> <span class="${f.ok ? 'ok' : 'no'}">${f.ok ? '✅' : '❌'}</span> · ${f.seconds} s</div></div>`).join('')
     || (b.running ? '<p class="muted">Working on the first question. Each round takes about 15–60 seconds on a Pi, or longer while the Docking AI is running.</p>'
                   : '<p class="muted">Press ▶ Start practicing. You need a language model running first: see the guide.</p>');
   lineChart($('bchart'), [
@@ -347,10 +367,13 @@ function verdictText(r) {
 }
 let xdirty = false;            // you changed a setting: the page's refresh mustn't put it back
 $('xpages').onchange = $('xstrict').onchange = () => { xdirty = true; };
+document.querySelectorAll('.xtopic').forEach(c => c.onchange = () => { xdirty = true; });
 $('xstart').onclick = async () => {
   const pages = +$('xpages').value, strict = $('xstrict').checked;
-  if (!confirm(`Save this experiment and start a new one with an empty notebook?\n\nNew settings: ${pages} notebook page${pages > 1 ? 's' : ''}, strict checker ${strict ? 'ON' : 'OFF'}`)) return;
-  await post('/api/chatbot/experiment', {pages, strict});
+  const topics = [...document.querySelectorAll('.xtopic')].filter(c => c.checked).map(c => c.value);
+  if (!topics.length) { alert('Pick at least one kind of question.'); return; }
+  if (!confirm(`Save this experiment and start a new one with an empty notebook?\n\nNew settings: ${topics.join(' + ')}, ${pages} notebook page${pages > 1 ? 's' : ''}, strict checker ${strict ? 'ON' : 'OFF'}`)) return;
+  await post('/api/chatbot/experiment', {pages, strict, topics});
   xdirty = false; loadBot();
 };
 $('bsave').onclick = async () => { await post('/api/chatbot/settings', {model: $('bmodel').value.trim()}); loadBot(); };
@@ -394,7 +417,14 @@ async function loadChat() {
   const html = c.messages.map(m => {
     let h = `<div class="bubble you">${esc(m.you)}${m.fixed && !same(m.fixed, m.you) ? `<div class="fix">✏️ I read this as: ${esc(m.fixed)}</div>` : ''}</div>`;
     const many = m.answers.length > 1 || m.skipped;
-    h += m.answers.map((a, i) => `<div class="bubble ai">${many ? `<b>${i + 1}. ${esc(a.q)}</b>\n` : ''}${esc(a.a)}${a.math ? `<div class="fix">🧮 Python checked the math: ${esc(a.math[0].replace(/\*/g, '×'))} = ${esc(a.math[1])}</div>` : ''}</div>`).join('');
+    h += m.answers.map((a, i) => {
+      let notes = '';
+      if (a.engine) notes += `<div class="fix">🧮 The math engine worked it out exactly: ${esc(a.engine.text)}</div>`;
+      if (a.tutor) notes += `<div class="fix">🧠 Your tiny math AI (course ${a.tutor.course}, trained on this Pi) says: <b>${esc(a.tutor.answer == null ? '?' : a.tutor.answer)}</b> ${a.tutor.ok ? '✅' : `❌ (it's still learning: ${a.tutor.mastered ? 'mastered the course, but not this one' : 'level ' + a.tutor.level + ' of ' + a.tutor.levels})`}</div>`;
+      if (a.examples) notes += `<div class="fix">📒 Used ${a.examples} checked example${a.examples > 1 ? 's' : ''} from the Chatbot's practice</div>`;
+      if (a.math) notes += `<div class="fix">🧮 Python checked the math: ${esc(a.math[0].replace(/\*/g, '×'))} = ${esc(a.math[1])}</div>`;
+      return `<div class="bubble ai">${many ? `<b>${i + 1}. ${esc(a.q)}</b>\n` : ''}${esc(a.a)}${notes}</div>`;
+    }).join('');
     if (m.skipped && m.answers.length === 3) h += `<div class="bubble ai">I answered the first 3 questions. Ask the other ${m.skipped} in a new message!</div>`;
     if (m.error) h += `<div class="bubble ai" style="border-color:var(--bad)">⚠️ ${esc(m.error)}</div>`;
     return h;

@@ -4,9 +4,9 @@ Three ways an AI can **teach itself**, all running on a Raspberry Pi:
 
 | | Part | What happens |
 |---|---|---|
-| 🧮 | **The self-taught math AI** | A tiny GPT (the same kind of AI as ChatGPT, a million times smaller) starts knowing nothing. It writes its own quiz questions, mostly about what it's worst at, answers them, and a calculator checks every answer. It goes from adding 1-digit numbers to adding and subtracting 3-digit numbers, all by itself. |
-| 💬 | **The self-quizzing chatbot** | A small ready-made AI language model writes its own math word problems, Python checks the math, then it answers them. Wrong answers go into a notebook, and an experiment tests whether reading the notebook helps. |
-| 🗨️ | **Chat with it** | Type any question, even with spelling mistakes. It fixes your message, answers each question, and Python checks any math. |
+| 🧮 | **The self-taught math AI** | A tiny GPT (the same kind of AI as ChatGPT, a million times smaller) starts knowing nothing. It writes its own quiz questions, mostly about what it's worst at, answers them, and a checker marks every answer. **Course 1:** adding and subtracting up to 999. **Course 2:** multiplying, algebra (solve for x) and calculus (derivatives), with a second, bigger brain. All by itself. |
+| 💬 | **The self-quizzing chatbot** | A small ready-made AI language model writes its own math problems (arithmetic, algebra and calculus), a math engine checks them, then it answers them. Wrong answers go into a notebook, and experiments test whether reading the notebook helps. |
+| 🗨️ | **Chat with it** | Type any question, even with spelling mistakes. It fixes your message, answers each question, and a math engine works out any arithmetic, algebra or calculus exactly. Your trained math AI has a go too, and the chatbot's checked practice problems help with word problems. |
 | 🔬 | **The model-collapse experiment** | What happens when an AI learns only from its own writing? Round after round, its sentences get stranger and more repetitive, unless you keep real writing in the mix. |
 
 The big idea: **an AI can only teach itself if something checks its work.** Parts 1 and 2 have a checker. Part 3 shows what happens without one.
@@ -54,7 +54,9 @@ It uses port **8100**, so it runs next to the [Pi Stock Tracker](https://github.
 | File | What it is |
 |---|---|
 | `tinygpt.py` | The tiny GPT: attention, the neural network, backpropagation and the Adam optimizer, written out by hand |
-| `selfmath.py` | Part 1: the math AI's self-quizzing, checking, notebook and levels |
+| `selfmath.py` | Part 1, course 1: the math AI's self-quizzing, checking, notebook and levels (adding and subtracting) |
+| `advmath.py` | Part 1, course 2: multiplying, algebra and calculus, with its own bigger brain |
+| `mathengine.py` | A small, exact math engine: solves equations, takes derivatives and integrals, without ever running text as code |
 | `chatbot.py` | Part 2: the teacher, checker, student and notebook, talking to Ollama or llama.cpp |
 | `chat.py` | The Chat tab: fixing spelling and grammar, splitting questions, checking math, answering |
 | `collapse.py` | Part 3: the model-collapse experiment |

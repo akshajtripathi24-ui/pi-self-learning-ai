@@ -26,10 +26,29 @@ Every 100 rounds it takes a **test of 300 brand-new questions**, which it doesn'
 
 On a fast computer it learned all 7 levels in about 4 minutes. A Pi 4 is slower, so expect roughly 45 minutes to an hour.
 
+## Course 2: algebra and calculus
+After course 1, the math AI moves on to **course 2** by itself (or pick it with **What it trains** on the Math AI tab). Course 2 has its **own, separate brain** (104,404 numbers), because course 1's brain only knows the 14 symbols of adding and subtracting. Course 2 needs more: `*`, `x`, `^` and `d/dx`. Course 1's progress is kept.
+
+| Level | Example | Answer |
+|---|---|---|
+| 1. Multiplying 1-digit numbers | 7 × 8 | 56 |
+| 2. Multiplying 2-digit × 1-digit | 47 × 8 | 376 |
+| 3. Algebra: solve x + b = c | x + 7 = 15 | x = 8 |
+| 4. Algebra: solve ax + b = c | 3x + 5 = 20 | x = 5 |
+| 5. Calculus: derivative of one term | d/dx 4x³ | 12x² |
+| 6. Calculus: derivative of two terms | d/dx 3x² − 5x | 6x − 5 |
+| 7. Mixed: everything so far | any of the above | |
+
+It works exactly like course 1: it writes its own questions, mostly about its weak spots, and a checker marks every answer. It needs **95%** on a test of new questions to move up a level (a bit less than course 1's 97%, because these are harder).
+
+**Honest limits:** a brain this tiny can learn these exact kinds of question, but not "all of math". Even huge AIs find advanced math hard. It learns the *patterns* of these questions (like "multiply the number in front by the power, then take 1 off the power"), not a full understanding of algebra.
+
+**How long it takes:** in a test on a fast computer, it passed level 1 after 200 rounds (about 10 seconds), level 2 after about 2,300 rounds, and level 3 (its first algebra) after about 5,200 rounds, about 5 minutes in all. A Pi 4 is roughly 3 to 5 times slower, and the calculus levels are harder, so expect course 2 to take **hours**, not minutes. Watch the test score chart: it climbs, drops each time it levels up (a new, harder kind of question), then climbs again.
+
 ## The trick: it writes answers backward
 Inside, it writes 47 + 38 = 85 as `047+038=5800.`: the answer is backward, ones digit first. That's how *you* add: you start with the ones, then carry to the tens. If it had to write the tens digit first, it would need to know about the carry before working out the ones! The web page shows the answer the normal way.
 
 ## Attention: where it looks
-In **🙋 Ask it a question**, the colored grid shows its **attention**: which digits of the question it "looked at" while writing each digit of the answer. A well-trained AI looks at the matching digits: the ones digits for the ones place, the tens digits for the tens place. Nobody programmed that. It figured it out.
+In **🙋 Ask it a question**, type any question either course practices (`47+38`, `7*8`, `3x+5=20`, `d/dx 4x^3`). The colored grid shows its **attention**: which digits of the question it "looked at" while writing each digit of the answer. A well-trained AI looks at the matching digits: the ones digits for the ones place, the tens digits for the tens place. Nobody programmed that. It figured it out.
 
 **Next:** [3. The self-quizzing chatbot](03-chatbot.md)

@@ -62,6 +62,8 @@ The first experiment on our Pi found that **the notebook made it worse** (27% ri
 | 3 | Strict checker on, **1 notebook page** | Were the long prompts the problem? The student sees 1 example instead of 3. | About 1–2 hours |
 | 4 | A **bigger model** (1.5B, 3 times bigger) | Does a smarter model use the notebook better? Run `bash setup-llamacpp.sh 1.5b` on the Pi (a 1.1 GB download). When the chatbot notices the new model, it starts a new experiment by itself. It's about 3 times slower, so leave it overnight. To go back: `bash setup-llamacpp.sh 0.5b` | Overnight |
 
+**Kinds of question:** each experiment can also choose what the AI practices: **arithmetic** (12 × 5), **algebra** ("solve for x" word problems) and **calculus** (derivatives). The math engine (`mathengine.py`) checks algebra and calculus: it solves the equation, or works out the derivative, exactly. Bad questions are thrown away, like an equation where x isn't one whole number, or a function it can't read (like sin(x)). Derivatives are compared *as math*, so `2x + 6x^2` counts the same as `6x^2 + 2x`. Every practice problem the student gets right (so Python and the AI agree) is also saved for the Chat tab to use as an example.
+
 **How to run one:** pick the settings on the Chatbot tab, press **🧪 Start a new experiment with these settings**, and let it practice until both columns have **at least 30 rounds** (60 is better). Starting a new experiment saves the current one and empties the notebook, so each experiment starts fair.
 
 ## Good to know

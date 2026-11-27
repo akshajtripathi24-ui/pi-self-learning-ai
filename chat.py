@@ -13,7 +13,8 @@ import re
 import threading
 import time
 
-from chatbot import safe_math
+import mathengine
+from chatbot import similar
 
 FIX_PROMPT = """Fix the spelling and grammar mistakes in the text. Keep the same meaning and the same questions.
 Don't answer the questions. Reply with only the fixed text.
@@ -29,10 +30,6 @@ Fixed:"""
 
 ANSWER_SYSTEM = """You are a friendly helper for a student who loves robotics, space and coding.
 Answer the question clearly in 2 to 4 short sentences. If you're not sure about something, say so."""
-
-MATH_WORDS = [(r"\bmultiplied by\b|\btimes\b|×", " * "), (r"\bdivided by\b|÷", " / "),
-              (r"\bplus\b|\badded to\b", " + "), (r"\bminus\b|\btake away\b", " - ")]
-
 
 QUESTION_WORDS = ["what", "why", "how", "when", "where", "who", "which", "whose", "can", "could", "is", "are", "do",
                   "does", "did", "will", "would", "should", "was", "were", "have", "has", "explain", "tell"]
@@ -95,23 +92,16 @@ def split_questions(text, most=3):
     return questions[:most], max(0, len(questions) - most)
 
 
-def find_math(question):
-    """The exact answer to any math in the question, worked out by Python: ("47 * 38", 1786) or None."""
-    t = question.lower().replace(",", "")
-    for pattern, symbol in MATH_WORDS:
-        t = re.sub(pattern, symbol, t)
-    t = re.sub(r"(?<=[\d)])\s*x\s*(?=[\d(])", " * ", t)               # "5 x 4", "(12 + 8) x 3"
-    for expr in sorted(re.findall(r"[\d(][\d\s+\-*/().]*[\d)]", t), key=len, reverse=True):
-        try:
-            return " ".join(expr.split()), safe_math(expr, whole=False)
-        except ValueError:
-            continue
-    return None
+def describe(kind, what, answer):
+    """How the math engine's answer is shown, and told to the AI."""
+    return {"solve": "%s, so %s" % (what, answer), "derivative": "d/dx (%s) = %s" % (what, answer),
+            "integral": "the integral of %s is %s" % (what, answer)}.get(kind, "%s = %s" % (what.replace("*", "×"), answer))
 
 
 class Chat:
-    def __init__(self, bot):
+    def __init__(self, bot, tutor=None):
         self.bot = bot                     # the self-quizzing chatbot: we share its connection to the model
+        self.tutor = tutor                 # asks your trained math AI, if the question is something it practices
         self.lock = threading.Lock()
         self.messages = []                 # [{"you": ..., "fixed": ..., "answers": [{"q", "a", "math"}], ...}]
         self.busy = False
@@ -139,6 +129,13 @@ class Chat:
         threading.Thread(target=self._work, args=(msg,), daemon=True).start()
         return True
 
+    def _examples(self, q, n=2):
+        """Up to 2 practice problems like this one that the Chatbot got right (so Python and the AI agreed)."""
+        solved = list(self.bot.state.get("solved", []))
+        words = set(re.findall(r"[a-z]{4,}", q.lower()))
+        good = [e for e in similar(q, solved, n) if len(words & set(re.findall(r"[a-z]{4,}", e["problem"].lower()))) >= 2]
+        return good
+
     def _set(self, stage):
         self.stage, self.stage_since = stage, time.time()
         self.bot.hold_until = time.time() + 120               # pause the practice while we chat
@@ -164,10 +161,20 @@ class Chat:
             history = [m for m in self.messages[:-1] if m["answers"]][-2:]
             for q in questions:
                 self._set("answering")
-                math = find_math(q)
+                found = mathengine.find_problem(q)                       # 3. the math engine works out any math exactly
                 system = ANSWER_SYSTEM
-                if math:
-                    system += "\nA calculator worked out the math exactly: %s = %s. Use this number." % (math[0], fmt(math[1]))
+                engine = tutor = None
+                examples = []
+                if found:
+                    kind, what, answer = found
+                    engine = {"kind": kind, "what": what, "answer": answer, "text": describe(kind, what, answer)}
+                    system += "\nA math engine worked this out exactly: %s. Use this answer, and explain the steps simply." % engine["text"]
+                    tutor = self.tutor(kind, what) if self.tutor else None   # ...and your trained math AI has a go too
+                elif re.search(r"\d", q):                                # a word problem: use checked practice problems
+                    examples = self._examples(q)
+                    if examples:
+                        system += "\nHere are similar problems that were solved and checked:\n" + "\n".join(
+                            "PROBLEM: %s MATH: %s ANSWER: %s" % (e["problem"], e["math"], e["answer"]) for e in examples)
                 convo = [{"role": "system", "content": system}]
                 for m in history:
                     convo.append({"role": "user", "content": m["fixed"]})
@@ -175,7 +182,7 @@ class Chat:
                 convo.append({"role": "user", "content": q})
                 answer = llm.chat(convo, max_tokens=220, temperature=0.4).strip()
                 with self.lock:
-                    msg["answers"].append({"q": q, "a": answer, "math": [math[0], fmt(math[1])] if math else None})
+                    msg["answers"].append({"q": q, "a": answer, "engine": engine, "tutor": tutor, "examples": len(examples)})
         except Exception as e:
             msg["error"] = "the model took too long to answer" if "timed out" in str(e) else str(e)
         finally:
@@ -183,7 +190,3 @@ class Chat:
                 self.busy = False
                 self.stage = None
             self.bot.hold_until = time.time() + 20             # carry on practicing soon, unless you ask again
-
-
-def fmt(x):
-    return "{:,}".format(x) if isinstance(x, int) else ("%.6g" % x)
