@@ -374,8 +374,9 @@ def find_problem(text):
     t = re.sub(r"\bdivided by\b", "/", t)
     t = re.sub(r"\bplus\b", "+", t)
     t = re.sub(r"\bminus\b", "-", t)
+    x_times = False
     if not re.search(r"=|deriv|d/dx|integra|differentiat|solve|x\s*\^|\dx", t):   # no algebra: "5 x 4" means times
-        t = re.sub(r"(?<=[\d)])\s+x\s+(?=[\d(])", " * ", t)
+        t, x_times = re.subn(r"(?<=[\d)])\s+x\s+(?=[\d(])", " * ", t)
     math_chars = r"[0-9x+\-*/^(). ×÷²³]"
     # derivatives: "derivative of 4x^3", "d/dx 4x^3", "differentiate 4x^3"
     m = re.search(r"(?:derivative of|differentiate|d/dx)\s*(?:of\s*)?(%s+)" % math_chars, t)
@@ -413,8 +414,12 @@ def find_problem(text):
         root = _exact_sqrt(n)
         return "sqrt", "√" + m.group(1), fmt_number(root) if root is not None else "about %.6g" % math.sqrt(n)
     # plain arithmetic: the longest piece of math with an operator in it (a minus at the start counts: -5 + 3)
-    for piece in sorted(re.findall(r"(?:(?<![\d)])-)?[\d(][\d\s+\-*/^().]*[\d)]", t), key=len, reverse=True):
+    found = re.finditer(r"(?:(?<![\d)])-)?[\d(][\d\s+\-*/^().]*[\d)]", t)
+    for m in sorted(found, key=lambda m: len(m.group()), reverse=True):
+        piece = m.group()
         if not re.search(r"[\d)]\s*[-+*/^]\s*[-\d(]", piece):       # an operator between numbers: 2+3, (-1)^7
+            continue
+        if not clearly_math(piece, t[:m.start()], t[m.end():], x_times):
             continue
         try:
             p = parse(piece)
@@ -427,6 +432,27 @@ def find_problem(text):
                 return "arithmetic", " ".join(piece.split()), "too big to work out (more than 1,000 digits)"
             continue
     return None
+
+
+# "-", "/" and "x" often aren't math: "a 2-3 hour drive", "$300-400", "on 11/27", "Windows 10/11", "a 2 x 4", "open 24/7"
+MATH_CUE = re.compile(r"(?:^|\b(?:what is|what's|whats|wats|wat is|what are|how much is|calculate|compute|work out|"
+                      r"solve|evaluate|simplify|find)\s*)$")
+
+
+def clearly_math(piece, before, after, x_times=False):
+    """Is this piece of the question really math to work out? Pieces with only "-" or "/" in them (or an "x" that
+    was turned into "*") count only straight after words like "what is" or "calculate" (or if the question is just
+    math), and not when a word comes right after them, like "2-3 hours"."""
+    ops = set(re.findall(r"(?<=[\d)\s])[-+*/^](?=[\s\d(.-])", piece))
+    if ops - {"-", "/"} and not (ops == {"*"} and x_times):
+        return True                                          # + or ^ (or a typed *) means math: 47*38, 2+2, 2^10
+    before = before.strip()
+    if re.search(r"[$£€#]$|\b(?:windows|ios|android|version|v|ages?|grades?|from|between|on|open|score|scored|ended|won|lost|"
+                 r"rated|room|page|pages|chapter|route|highway|interstate|i)$", before):
+        return False
+    if re.match(r"\s*[a-z]", after):                          # "2-3 hours", "10/11 laptops"
+        return False
+    return bool(MATH_CUE.search(before))
 
 
 def show_value(v):

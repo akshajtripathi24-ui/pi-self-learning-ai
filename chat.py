@@ -13,6 +13,7 @@ import difflib
 import http.client
 import json
 import os
+import random
 import re
 import secrets
 import threading
@@ -35,7 +36,45 @@ Fixed:"""
 
 ANSWER_SYSTEM = """You are a friendly helper for a student who loves robotics, space and coding.
 Answer the question clearly in 2 to 4 short sentences. If you're not sure about something, say so.
+Don't make up facts about people, and don't guess someone's reasons or feelings as if you knew them.
 If you can't help with something, say why in one sentence, and suggest something related you can help with."""
+
+# questions where one confident answer would be a guess: why someone feels or does something, and opinions
+WHY_PERSON = re.compile(r"\bwhy (?:do|does|did|is|are|was|were|would|wouldn'?t|won'?t|can'?t|doesn'?t|don'?t|didn'?t|isn'?t|aren'?t|wasn'?t)\b"
+                        r"[^?]*?\b(?:like|likes|liked|love|loves|loved|hate|hates|hated|dislike|dislikes|enjoy|enjoys|want|wants|prefer|"
+                        r"prefers|feel|feels|think|thinks|care|cares|scared|afraid|angry|mad|sad|happy|upset|annoyed|bored|jealous|"
+                        r"eat|eats|watch|watches|play|plays|choose|chose|pick|picks|believe|believes|trust|trusts|act|acts|say|says|"
+                        r"said|mean|rude|nice|quiet|shy|annoying|weird|lazy)\b", re.I)
+OPINION = re.compile(r"\b(?:best|worst|better|worse|favou?rite|should i|should we|is it worth|worth it|overrated|underrated|"
+                     r"good idea|bad idea|coolest|greatest|smartest|fairest|versus|vs\.?|do you think|your opinion|"
+                     r"what do you think|is it ok(?:ay)? to|is it bad|is it good)\b", re.I)
+WHY_NOTE = """
+This question asks WHY a person (or people) feel or act a certain way. Unless there's a clear, well-known answer, you can't
+know the real reason, especially for someone you don't know. Don't pick one reason, and don't state a guess as a fact. Say you can't know for sure, then give 3 or 4
+common possible reasons as a short list, and end by asking what they think, or suggesting they ask the person."""
+OPINION_NOTE = """
+This is an opinion question, so there isn't one right answer. Don't state one opinion as a fact. Give the main things it
+depends on as a short list, with a good point for each side. You can say what you'd lean toward and why, but say it depends
+on the person."""
+# words that show an answer isn't pretending to know for sure
+HEDGE = re.compile(r"\b(might|may|maybe|could|possibly|perhaps|probably|some people|many people|others|depends|depending|"
+                   r"not sure|don'?t know|do not know|can'?t know|cannot know|no way to know|hard to say|possible|reasons|factors|"
+                   r"everyone|personal|preference|on the other hand|it varies|varies)\b", re.I)
+
+
+WHY_SOMEONE = re.compile(r"\bwhy (?:do|does|did|is|are|was|were|would|won'?t|can'?t|doesn'?t|don'?t|didn'?t|isn'?t|aren'?t|wasn'?t)\s+"
+                         r"(?:my|your|his|her|their|our|the|some|most|all)?\s*(?:mom|moms|dad|dads|mother|father|parents?|brother|"
+                         r"sister|siblings?|friends?|best friend|teachers?|coach|boss|classmates?|cousins?|grandma|grandpa|"
+                         r"grandparents|family|uncle|aunt|neighbou?rs?|kids|boys|girls|people|someone|somebody|everyone|he|she)\b", re.I)
+
+
+def guess_kind(question):
+    """"why" for why-someone-feels questions, "opinion" for opinions, else None."""
+    if WHY_PERSON.search(question) or WHY_SOMEONE.search(question):
+        return "why"
+    if OPINION.search(question):
+        return "opinion"
+    return None
 
 TITLE_PROMPT = """Write a short title (2 to 5 words) for a chat that starts with this question. Reply with only the title.
 
@@ -44,6 +83,38 @@ Title: Space station speed
 
 Question: {question}
 Title:"""
+
+SUGGEST_PROMPT = """Write 2 short follow-up questions a curious student might ask next. Each one under 10 words, on its own line.
+Reply with only the 2 questions.
+
+Question: How fast does the ISS go?
+Answer: About 28,000 km/h, so it goes around Earth about every 90 minutes.
+Follow-ups:
+How do astronauts sleep on the ISS?
+Can I see the ISS from my house?
+
+Question: {question}
+Answer: {answer}
+Follow-ups:"""
+
+COMPARE_CHANCE = float(os.environ.get("CHAT_COMPARE_CHANCE", "0.25"))   # about 1 in 4 single questions also gets a
+                                                                          # second answer, so you can pick the one you like
+CAREFUL, CREATIVE = 0.4, 0.95  # the two answers' temperatures: careful (sticks to the likeliest words) and creative
+
+
+def clean_suggestions(text, question):
+    """The AI's follow-up questions, tidied: no numbers or bullets, not too short or long, not your own question again."""
+    out = []
+    for line in (text or "").split("\n"):
+        t = re.sub(r"^\s*(?:[-*•]|\d+[.)]|follow-?ups?:)\s*", "", line, flags=re.I).strip().strip('"\'')
+        if not 3 <= len(t.split()) <= 14 or is_refusal(t) or t.lower().rstrip("?") == question.lower().rstrip("?"):
+            continue
+        if not t.endswith("?") and _is_question(t):
+            t += "?"
+        if t.lower() not in [o.lower() for o in out]:
+            out.append(t)
+    return out[:2]
+
 
 RETRY_SYSTEM = """You are a helpful teacher for a high school student. Answer the question clearly and simply in 2 to 4 sentences.
 Only refuse if the question asks for something truly dangerous or harmful. If you do refuse, say why in one sentence,
@@ -125,6 +196,14 @@ def math_bits(text):
     return re.findall(r"\d+(?:\.\d+)?|[+*/^=%]|(?<=[\d\s])-(?=[\s\d.(x])", text)
 
 
+def names(text):
+    """Words you typed with a capital letter in the middle of a sentence, like "Akshaj" or "Micro Center"."""
+    out = []
+    for sentence in _sentences(text):
+        out += [w for w in re.findall(r"[A-Za-z']+", sentence)[1:] if w[0].isupper() and w != "I" and not w.startswith("I'")]
+    return out
+
+
 def only_fixed(original, fixed):
     """The safety check: did the AI only fix the spelling and grammar? Small AIs sometimes answer the question
     instead ("...is Jupiter."), or add their own sentences. If so, we keep what you typed."""
@@ -133,6 +212,10 @@ def only_fixed(original, fixed):
         return False
     # the math must stay exactly the same: "fixing" 2.5 into 25, or + into -, would solve the wrong problem
     if math_bits(a) != math_bits(b):
+        return False
+    # and names must stay exactly the same: "Akshaj" isn't a misspelling of "Akash"
+    fixed_words = set(re.findall(r"[A-Za-z']+", fixed))
+    if any(name not in fixed_words for name in names(original)):
         return False
     # it mustn't add sentences that aren't questions (that's usually an answer)
     statements = lambda t: sum(not _is_question(x) for x in _sentences(t))
@@ -240,6 +323,9 @@ class Chat:
             for a in m.get("answers", []):
                 if a.get("writing"):
                     a["writing"], a["stopped"], a["interrupted"] = False, True, True
+                if a.get("writing_b"):                         # the second answer was cut off: just keep the first
+                    a.pop("b", None), a.pop("temps", None)
+                    a["writing_b"] = False
         if c["messages"]:
             last = c["messages"][-1]
             if not last.get("answers") and not last.get("error") and not last.get("stopped"):
@@ -270,7 +356,7 @@ class Chat:
             return {"chats": self._list(), "chat": chat,      # (a copy: the answer keeps changing while it's written)
                     "busy": self.busy, "busy_chat": self.busy_chat, "stage": self.stage,
                     "stage_seconds": round(time.time() - self.stage_since) if self.stage else None,
-                    "speed": self.bot.llm.speed, "model": self.bot.llm.model_name}
+                    "speed": self.bot.llm.speed, "model": self.bot.llm.model_name, "picks": self.picks()}
 
     def _new(self):
         cid = time.strftime("%Y%m%d-%H%M%S") + "-" + secrets.token_hex(2)
@@ -299,11 +385,18 @@ class Chat:
             pass
         return True
 
-    def send(self, text, chat_id=None):
-        """Returns the chat's id (a new chat if chat_id is empty), or None if it's still busy."""
+    def send(self, text, chat_id=None, compare=True, suggest=True):
+        """Returns the chat's id (a new chat if chat_id is empty), or None if it's still busy.
+        compare: sometimes write a second answer to choose from. suggest: suggest follow-up questions afterwards."""
         text = " ".join(str(text).split())[:600]
         if not text:
             raise ValueError("Type a question first.")
+        if self.busy and self.stage == "suggesting":          # you asked something new: skip the suggestions
+            self.stop_asked = True
+            for _ in range(100):
+                if not self.busy:
+                    break
+                time.sleep(0.05)
         with self.lock:
             if self.busy:
                 return None
@@ -315,7 +408,7 @@ class Chat:
                 c["title"] = clean_title("", text)            # a first title right away; the AI writes a better one
             self.busy, self.busy_chat, self.stop_asked = True, c["id"], False
             self._save(c)
-        threading.Thread(target=self._work, args=(c, msg), daemon=True).start()
+        threading.Thread(target=self._work, args=(c, msg, False, compare, suggest), daemon=True).start()
         return c["id"]
 
     def stop(self):
@@ -329,10 +422,37 @@ class Chat:
             if self.busy or not c or not c["messages"]:
                 return None
             msg = c["messages"][-1]
-            msg["answers"], msg["error"], msg["stopped"] = [], None, False
+            msg["answers"], msg["error"], msg["stopped"], msg["suggestions"] = [], None, False, []
             self.busy, self.busy_chat, self.stop_asked = True, c["id"], False
-        threading.Thread(target=self._work, args=(c, msg, True), daemon=True).start()
+        threading.Thread(target=self._work, args=(c, msg, True, False, True), daemon=True).start()
         return c["id"]
+
+    def pick(self, chat_id, msg_time, index, which):
+        """You chose the answer you like better (which = "a" or "b"). The one you chose becomes the answer."""
+        with self.lock:
+            c = self.chats.get(chat_id)
+            m = next((m for m in (c["messages"] if c else []) if abs(m.get("time", 0) - float(msg_time)) < 1e-3), None)
+            if not m or not 0 <= index < len(m["answers"]) or which not in ("a", "b"):
+                return False
+            e = m["answers"][index]
+            if not e.get("b") or e.get("pick") or e.get("writing") or e.get("writing_b"):
+                return False
+            if which == "b":
+                e["a"], e["b"] = e["b"], e["a"]
+                e["temps"] = e["temps"][::-1]
+            e["pick"] = which
+            self._save(c)
+            return True
+
+    def picks(self):
+        """How often you chose the careful answer or the creative one (a tiny experiment of your own)."""
+        out = {"careful": 0, "creative": 0}
+        for c in self.chats.values():
+            for m in c["messages"]:
+                for e in m.get("answers", []):
+                    if e.get("pick") and e.get("temps"):
+                        out["careful" if e["temps"][0] <= CAREFUL else "creative"] += 1
+        return out
 
     # ------------------------------------------------------------ what it can use to answer
     def _examples(self, q, n=2):
@@ -365,7 +485,7 @@ class Chat:
         self.bot.hold_until = time.time() + 120               # pause the practice while we chat
 
     # ------------------------------------------------------------ answering
-    def _work(self, chat, msg, again=False):
+    def _work(self, chat, msg, again=False, compare=False, suggest=True):
         llm = self.bot.llm
         try:
             ok, why = llm.check()
@@ -386,7 +506,7 @@ class Chat:
             with self.lock:
                 msg["fixed"], msg["skipped"] = fixed, extra
                 # this chat's last 3 answered messages (not refusals: a small AI copies those)
-                history = [m for m in chat["messages"] if m is not msg and m["answers"]
+                history = [m for m in chat["messages"] if m is not msg and any(a["a"] for a in m["answers"])
                            and not all(a.get("refused") or is_refusal(a["a"]) for a in m["answers"])][-3:]
             if self.stop_asked:
                 with self.lock:
@@ -411,7 +531,9 @@ class Chat:
                     tutor = self.tutor(kind, what) if self.tutor else None   # ...and your trained math AI has a go too
                 elif re.search(r"\d", q):                                # a word problem: use checked practice problems
                     examples = self._examples(q)
-                system = ANSWER_SYSTEM + math_note
+                guess = None if found else guess_kind(q)          # would one confident answer just be a guess?
+                guess_note = {"why": WHY_NOTE, "opinion": OPINION_NOTE}.get(guess, "")
+                system = ANSWER_SYSTEM + math_note + guess_note
                 if examples:
                     system += "\nHere are similar problems that were solved and checked:\n" + "\n".join(
                         "PROBLEM: %s MATH: %s ANSWER: %s" % (e["problem"], e["math"], e["answer"]) for e in examples)
@@ -428,7 +550,7 @@ class Chat:
                 for eq, ea in earlier:
                     convo += [{"role": "user", "content": eq}, {"role": "assistant", "content": ea[:400]}]
                 convo.append({"role": "user", "content": q})
-                entry = {"q": q, "a": "", "engine": engine, "tutor": tutor, "examples": len(examples), "writing": True,
+                entry = {"q": q, "a": "", "engine": engine, "tutor": tutor, "examples": len(examples), "writing": True, "guess": guess,
                          "memories": list({cid: {"chat": cid, "title": t} for _, _, cid, t, _, _ in memories}.values())}
                 with self.lock:
                     msg["answers"].append(entry)
@@ -449,6 +571,15 @@ class Chat:
                                     entry["a"] = first
                             else:
                                 stopped = self._explain(entry, q)
+                elif not stopped and guess and entry["a"] and not HEDGE.search(entry["a"]):
+                    # it answered as if it knew for sure ("because it's unhealthy"): ask for the different possible reasons
+                    with self.lock:
+                        entry["a"], entry["writing"], entry["balanced"] = "", True, True
+                    simple = [{"role": "system", "content": ANSWER_SYSTEM + guess_note}, {"role": "user", "content": q}]
+                    stopped = self._write(entry, simple, 0.6, stage="balancing")
+                if (compare and len(questions) == 1 and not found and not stopped and entry["a"] and not entry.get("retried")
+                        and not entry.get("balanced") and random.random() < COMPARE_CHANCE):
+                    stopped = self._second(entry, convo)                  # sometimes: a second answer to choose from
                 with self.lock:
                     chat["updated"] = time.time()
                     self._save(chat)
@@ -458,10 +589,27 @@ class Chat:
             answered = [m for m in chat["messages"] if m["answers"]]
             if not chat.get("titled") and answered == [msg] and questions and not self.stop_asked:
                 self._set("titling")
-                title = llm.ask(TITLE_PROMPT.format(question=questions[0]), max_tokens=16, temperature=0.3)
+                try:
+                    title = llm.ask(TITLE_PROMPT.format(question=questions[0]), max_tokens=16, temperature=0.3)
+                except Exception:
+                    title = ""                                         # keep the answer; the title is just the first words
                 with self.lock:
                     if not chat.get("titled"):                         # (unless you renamed it in the meantime)
                         chat["title"], chat["titled"] = clean_title(title, fixed), True
+            # 6. follow-up questions you might ask next
+            if suggest and not self.stop_asked:
+                last = next((a for a in reversed(msg["answers"]) if a["a"] and not a.get("refused") and not a.get("stopped")), None)
+                if last:
+                    self._set("suggesting")
+                    try:
+                        text = []
+                        llm.chat_stream([{"role": "user", "content": SUGGEST_PROMPT.format(question=last["q"], answer=last["a"][:400])}],
+                                        text.append, stop=lambda: self.stop_asked, max_tokens=48, temperature=0.7)
+                        if not self.stop_asked:
+                            with self.lock:
+                                msg["suggestions"] = clean_suggestions("".join(text), last["q"])
+                    except Exception:
+                        pass                                       # no suggestions this time; the answer is still fine
         except Exception as e:
             why = str(e)
             if "timed out" in why:
@@ -484,6 +632,21 @@ class Chat:
                     self._save(chat)
             self.bot.hold_until = time.time() + 20             # carry on practicing soon, unless you ask again
 
+    def _second(self, entry, convo):
+        """Write a second, more creative answer, and show the two in a random order (so you can't tell which is which).
+        Returns True if you pressed Stop (then only the first answer is kept)."""
+        with self.lock:
+            entry["b"], entry["writing_b"] = "", True
+        stopped = self._write(entry, convo, CREATIVE, stage="second", field="b")
+        with self.lock:
+            if stopped or not entry["b"] or is_refusal(entry["b"]):
+                entry.pop("b", None)
+                return stopped
+            entry["temps"] = [CAREFUL, CREATIVE]
+            if random.random() < 0.5:
+                entry["a"], entry["b"], entry["temps"] = entry["b"], entry["a"], [CREATIVE, CAREFUL]
+        return False
+
     def _explain(self, entry, q):
         """It said no without saying why. Ask for the reason (and a safer question to ask instead).
         If even that's a bare refusal, the Pi writes a reason itself. Returns True if you pressed Stop."""
@@ -496,19 +659,21 @@ class Chat:
                 entry["a"] = fallback_reason(q)
         return stopped
 
-    def _write(self, entry, convo, temperature, stage="writing"):
-        """Live typing: stream the answer into entry. Returns True if you pressed Stop."""
+    def _write(self, entry, convo, temperature, stage="writing", field="a"):
+        """Live typing: stream the answer into entry[field]. Returns True if you pressed Stop."""
         self._set(stage)
+        flag = "writing" if field == "a" else "writing_b"
 
         def add(piece):
             with self.lock:
-                entry["a"] += piece
+                entry[field] += piece
         stopped = False
         try:
             stopped = self.bot.llm.chat_stream(convo, add, stop=lambda: self.stop_asked, max_tokens=260, temperature=temperature)
         finally:                                    # even if the model crashes halfway, it's not "writing" any more
             with self.lock:
-                entry["a"] = entry["a"].strip()
-                entry["writing"] = False
-                entry["stopped"] = stopped
+                entry[field] = entry[field].strip()
+                entry[flag] = False
+                if field == "a":
+                    entry["stopped"] = stopped
         return stopped

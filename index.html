@@ -90,6 +90,14 @@ footer{text-align:center;color:var(--muted);font-size:12px;padding:20px}footer a
 .cursor{display:inline-block;animation:blink 1s steps(1) infinite;color:var(--accent)}
 @keyframes blink{50%{opacity:0}}
 @media (max-width:760px){.chatwrap{grid-template-columns:1fr}.chatside{border-right:0;padding-right:0;border-bottom:1px solid var(--line);padding-bottom:10px}#chatlist{max-height:180px}}
+.pair{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:6px}
+.pair .opt{border:1px solid var(--line);border-radius:10px;padding:8px 10px;background:#0b1222;white-space:pre-wrap}
+.pair .opt b{display:block;color:var(--accent);font-size:12px;margin-bottom:4px}
+.bubble.wide{max-width:100%;width:100%}
+.suggest{display:flex;flex-wrap:wrap;gap:8px;align-self:flex-start;max-width:85%}
+.chip{background:#111a2e;border:1px solid var(--line);color:var(--text);border-radius:999px;padding:6px 12px;font-size:13px;font-weight:600;cursor:pointer;text-align:left}
+.chip:hover{border-color:#155e75;color:var(--accent)}
+@media (max-width:600px){.pair{grid-template-columns:1fr}}
 .chatbox textarea{flex:1;resize:vertical;min-height:46px;padding:9px 11px;border-radius:10px;border:1px solid var(--line);background:#0b1222;color:var(--text);font:inherit;font-size:15px}
 </style>
 </head>
@@ -203,12 +211,15 @@ footer{text-align:center;color:var(--muted);font-size:12px;padding:20px}footer a
         <button id="chatnew" style="width:100%">➕ New chat</button>
         <input type="text" id="chatsearch" placeholder="🔍 Search your chats" aria-label="Search your chats" style="width:100%;margin:10px 0">
         <div id="chatlist"></div>
+        <div class="check"><input type="checkbox" id="chatsuggest"><label for="chatsuggest" style="margin:0">💡 Suggest follow-up questions</label></div>
+        <div class="check"><input type="checkbox" id="chatcompare"><label for="chatcompare" style="margin:0">🆚 Sometimes show 2 answers to pick from</label></div>
+        <p class="muted" id="chatpicks" style="font-size:12px;margin:6px 0 0"></p>
       </aside>
       <div class="chatmain">
         <div class="chathead"><b id="chattitle">New chat</b><span style="flex:1"></span><button class="ghost small" id="chatexport">⬇️ Export</button><button class="ghost small" id="chatrename">✏️ Rename</button><button class="ghost small" id="chatdelete">🗑️ Delete</button></div>
         <div id="chatlog" class="chatlog"></div>
         <p class="muted" id="chatstage" style="min-height:20px;margin:8px 0 0"></p>
-        <div class="chatbox"><textarea id="chatin" rows="2" placeholder="Ask anything… (Enter to send, Shift + Enter for a new line)"></textarea><button id="chatsend">Send</button><button id="chatstop" class="hide" style="background:var(--bad)">⏹️ Stop</button></div>
+        <div class="chatbox"><textarea id="chatin" rows="2" maxlength="600" placeholder="Ask anything… (Enter to send, Shift + Enter for a new line)"></textarea><button id="chatsend">Send</button><button id="chatstop" class="hide" style="background:var(--bad)">⏹️ Stop</button></div>
       </div>
     </div>
   </section>
@@ -477,17 +488,29 @@ async function loadChat() {
       if (a.examples) notes += `<div class="fix">📒 Used ${a.examples} checked example${a.examples > 1 ? 's' : ''} from the Chatbot's practice</div>`;
       if (a.memories && a.memories.length) notes += `<div class="fix">🔗 Remembered from: ${a.memories.map(x => `<a data-open="${esc(x.chat)}">${esc(x.title)}</a>`).join(', ')}</div>`;
       if (a.engine && a.engine.steps && a.engine.steps.length) notes += `<details class="steps"><summary>📝 Show the steps</summary><ol>${a.engine.steps.map(st => `<li>${esc(st)}</li>`).join('')}</ol></details>`;
+      if (a.balanced) notes += `<div class="fix">⚖️ It first gave one reason as if it knew for sure, so it was asked for the different possible reasons instead</div>`;
       if (a.retried && !a.refused) notes += `<div class="fix">🔁 It first said it couldn't help, so it tried again with a simpler question</div>`;
       if (a.refused) notes += `<div class="fix">🤔 ${a.explained ? 'It said no without a reason, so it was asked why. You can press 🔄 Try again.' : 'This small AI said no. If it\'s a normal question, try asking it a different way, or press 🔄 Try again.'}</div>`;
       if (a.stopped) notes += `<div class="fix">⏹️ ${a.interrupted ? 'Cut off: the Pi restarted while it was writing' : 'Stopped'}</div>`;
       const last = mi === msgs.length - 1 && i === m.answers.length - 1;
-      const acts = a.writing ? '' : `<div class="acts"><button class="act" data-say="${mi}:${i}">🔊 Read aloud</button>${last && !c.busy ? '<button class="act" data-regen="1">🔄 Try again</button>' : ''}</div>`;
+      const pair = 'b' in a && !a.pick;                 // two answers to choose from
+      const regen = last && !c.busy ? '<button class="act" data-regen="1">🔄 Try again</button>' : '';
+      if (pair) {
+        const done = !a.writing && !a.writing_b;
+        const opts = ['a', 'b'].map((k, j) => `<div class="opt"><b>Answer ${j + 1}</b>${esc(a[k])}${(k === 'a' ? a.writing : a.writing_b) ? '<span class="cursor">▌</span>' : ''}` +
+          (done ? `<div class="acts"><button class="act" data-pick="${m.time}|${i}|${k}">👍 I like this one</button></div>` : '') + '</div>').join('');
+        return `<div class="bubble ai wide">${many ? `<b>${i + 1}. ${esc(a.q)}</b>\n` : ''}<div class="fix" style="margin-top:0">🆚 Two answers this time. Which one do you like better?</div><div class="pair">${opts}</div>${notes}${regen ? `<div class="acts">${regen}</div>` : ''}</div>`;
+      }
+      if (a.pick && a.b) notes += `<details class="steps"><summary>🆚 You picked this answer. Show the other one</summary><div style="white-space:pre-wrap;margin-top:6px">${esc(a.b)}</div></details>`;
+      const acts = a.writing ? '' : `<div class="acts"><button class="act" data-say="${mi}:${i}">🔊 Read aloud</button>${regen}</div>`;
       return `<div class="bubble ai">${many ? `<b>${i + 1}. ${esc(a.q)}</b>\n` : ''}${esc(a.a)}${a.writing ? '<span class="cursor">▌</span>' : ''}${notes}${acts}</div>`;
     }).join('');
     if (m.skipped && m.answers.length === 3) h += `<div class="bubble ai">I answered the first 3 questions. Ask the other ${m.skipped} in a new message!</div>`;
     const lastMsg = mi === msgs.length - 1 && !c.busy;
     if (m.stopped && !m.answers.length) h += `<div class="bubble ai">⏹️ Stopped before answering.${lastMsg ? '<div class="acts"><button class="act" data-regen="1">🔄 Try again</button></div>' : ''}</div>`;
     if (m.error) h += `<div class="bubble ai" style="border-color:var(--bad)">⚠️ ${esc(m.error)}${lastMsg ? '<div class="acts"><button class="act" data-regen="1">🔄 Try again</button></div>' : ''}</div>`;
+    if (lastMsg && m.suggestions && m.suggestions.length)
+      h += `<div class="suggest">${m.suggestions.map(sg => `<button class="chip" data-ask="${esc(sg)}">↪ ${esc(sg)}</button>`).join('')}</div>`;
     return h;
   }).join('') || '<p class="muted">Ask your first question below. Try one with mistakes, like: wat is the bigest planet and how far is it</p>';
   if (html !== chatHtml) {
@@ -499,23 +522,36 @@ async function loadChat() {
     log.querySelectorAll('[data-open]').forEach(a => a.onclick = () => openChat(a.dataset.open));
     log.querySelectorAll('[data-say]').forEach(b => b.onclick = () => { const [mi, i] = b.dataset.say.split(':').map(Number); say(msgs[mi].answers[i].a, b); });
     log.querySelectorAll('[data-regen]').forEach(b => b.onclick = regenerate);
+    log.querySelectorAll('[data-ask]').forEach(b => b.onclick = () => { $('chatin').value = b.dataset.ask; sendChat(); });
+    log.querySelectorAll('[data-pick]').forEach(b => b.onclick = async () => {
+      const [time, index, which] = b.dataset.pick.split('|');
+      try { await post('/api/chat/pick', {chat: chatId, time: +time, index: +index, which}); } catch (e) { $('chatstage').textContent = '⚠️ ' + e.message; }
+      chatAsk++; chatLoading = false; chatHtml = ''; loadChat();
+    });
+    if (speaking) {                                     // still reading aloud: keep its button saying "Stop reading"
+      const b = log.querySelector(`[data-say="${speaking.dataset.say}"]`);
+      if (b) { b.textContent = '⏹️ Stop reading'; speaking = b; }
+    }
   }
   const speed = c.speed ? ` · ${c.speed} tokens a second` : '';
   const here = !c.busy_chat || c.busy_chat === chatId;
   $('chatstage').textContent = !c.busy ? '' : !here ? '⏳ It\'s answering in another chat. Wait a moment…' :
-    (c.stage === 'fixing' ? '✏️ Fixing the spelling and grammar… ' : c.stage === 'answering' ? '🤔 Thinking… ' : c.stage === 'writing' ? '✍️ Writing… ' : c.stage === 'explaining' ? '🤔 It said no, so it\'s working out why… ' : c.stage === 'titling' ? '🏷️ Naming this chat… ' : '⏳ Getting ready… ') + (c.stage_seconds || 0) + ' s' + speed;
-  $('chatsend').disabled = c.busy;
-  $('chatsend').classList.toggle('hide', c.busy && here);
-  $('chatstop').classList.toggle('hide', !(c.busy && here));
+    (c.stage === 'fixing' ? '✏️ Fixing the spelling and grammar… ' : c.stage === 'answering' ? '🤔 Thinking… ' : c.stage === 'writing' ? '✍️ Writing… ' : c.stage === 'explaining' ? '🤔 It said no, so it\'s working out why… ' : c.stage === 'balancing' ? '⚖️ It guessed one reason, so it\'s looking at the different possibilities… ' : c.stage === 'second' ? '🆚 Writing a second answer for you to compare… ' : c.stage === 'suggesting' ? '💡 Thinking of follow-up questions (you can already ask your next one)… ' : c.stage === 'titling' ? '🏷️ Naming this chat… ' : '⏳ Getting ready… ') + (c.stage_seconds || 0) + ' s' + speed;
+  const suggesting = c.busy && c.stage === 'suggesting';      // you can already send your next question
+  $('chatsend').disabled = c.busy && !suggesting;
+  $('chatsend').classList.toggle('hide', c.busy && here && !suggesting);
+  $('chatstop').classList.toggle('hide', !(c.busy && here) || suggesting);
+  const p = c.picks || {};
+  $('chatpicks').textContent = (p.careful || p.creative) ? `🆚 Your picks so far: careful answers ${p.careful} · creative answers ${p.creative}` : '';
   $('chatexport').disabled = !c.chat;
 }
 let chatSending = false;
 async function sendChat() {
   const text = $('chatin').value.trim();
-  if (!text || chatSending || (chat && chat.busy)) return;
+  if (!text || chatSending || (chat && chat.busy && chat.stage !== 'suggesting')) return;
   chatSending = true;
   $('chatin').value = '';
-  try { const r = await post('/api/chat/send', {text, chat: chatId}); if (r.chat) { chatId = r.chat.id; store.set('chat', chatId); } }
+  try { const r = await post('/api/chat/send', {text, chat: chatId, suggest: $('chatsuggest').checked, compare: $('chatcompare').checked}); if (r.chat) { chatId = r.chat.id; store.set('chat', chatId); } }
   catch (e) { $('chatin').value = text; $('chatstage').textContent = '⚠️ ' + e.message; }   // give your text back
   finally { chatSending = false; }
   chatAsk++; chatLoading = false;                       // a refresh that started before you sent is out of date
@@ -532,10 +568,11 @@ async function regenerate() {
   loadChat();
 }
 // 🔊 read aloud, with the browser's own voice (nothing is sent anywhere)
-let speaking = null;
+let speaking = null, speech = null;                   // the button that says "Stop reading", and what it's reading
 function say(text, btn) {
   if (!('speechSynthesis' in window)) { alert("Sorry, this browser can't read aloud."); return; }
-  const wasMe = speaking === btn;
+  const wasMe = speaking && speaking.dataset.say === btn.dataset.say;
+  speech = null;
   speechSynthesis.cancel();
   document.querySelectorAll('[data-say]').forEach(b => b.textContent = '🔊 Read aloud');
   speaking = null;
@@ -545,8 +582,8 @@ function say(text, btn) {
   const u = new SpeechSynthesisUtterance(words);
   const voice = speechSynthesis.getVoices().find(v => v.localService && v.lang.startsWith('en'));
   if (voice) u.voice = voice;
-  u.onend = () => { if (speaking === btn) { btn.textContent = '🔊 Read aloud'; speaking = null; } };
-  speaking = btn; btn.textContent = '⏹️ Stop reading';
+  u.onend = () => { if (speech === u) { if (speaking) speaking.textContent = '🔊 Read aloud'; speaking = speech = null; } };   // (not an old one)
+  speaking = btn; speech = u; btn.textContent = '⏹️ Stop reading';
   speechSynthesis.speak(u);
 }
 // ⬇️ export: the whole chat as a text file you can keep
@@ -559,6 +596,7 @@ $('chatexport').onclick = () => {
     if (m.fixed && !same(m.fixed, m.you)) out += `*(read as: ${m.fixed})*\n`;
     for (const a of m.answers) {
       out += `\n**AI:** ${a.a}\n`;
+      if (a.b) out += a.pick ? `- (You picked this answer over another one)\n` : `\n**AI (answer 2):** ${a.b}\n`;
       if (a.engine) out += `\n- Math engine: ${a.engine.text}\n` + (a.engine.steps || []).map((st, k) => `  ${k + 1}. ${st}\n`).join('');
       if (a.tutor) out += `- Your math AI said: ${a.tutor.answer == null ? 'no answer' : a.tutor.answer} ${a.tutor.ok ? '(right)' : '(wrong)'}\n`;
     }
@@ -571,7 +609,11 @@ $('chatexport').onclick = () => {
   link.click();
   setTimeout(() => URL.revokeObjectURL(link.href), 2000);
 };
-$('chatin').addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChat(); } });
+$('chatin').addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); sendChat(); } });
+for (const id of ['chatsuggest', 'chatcompare']) {                    // remembered in this browser, on by default
+  $(id).checked = store.get(id) !== 'off';
+  $(id).onchange = () => store.set(id, $(id).checked ? 'on' : 'off');
+}
 $('chatnew').onclick = () => { openChat(null); $('chatin').focus(); };
 $('chatsearch').oninput = () => { chatListHtml = ''; loadChat(); };
 $('chatrename').onclick = async () => {

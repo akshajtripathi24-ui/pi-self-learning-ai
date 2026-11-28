@@ -277,3 +277,48 @@ A question that really is dangerous still gets refused: the retry doesn't change
 
 A refusal counts as having a reason if it says something like "because", "dangerous", "private" or "internet". A refusal that already gave a reason is kept as it is, without asking again. Normal answers never go through any of this, so they're no slower.
 **Tested:** with a pretend model: a dangerous question (it explained why), "what's the weather today" (the Pi's own internet reason), a question where even the explanation was refused (the Pi's general reason), a refusal that already had a reason (kept, nothing extra asked), and two normal questions (no extra steps). All 6 passed, plus the 14 chat tests and a check in the browser.
+
+### 36. The AI made up reasons
+**Problem:** asked "Why does Akshaj not like tacos?", the AI said "because it's unhealthy", as if it knew. It can't know that! A better answer (like Gemini's) says it doesn't know, then gives the common reasons people don't like a food: the texture, toppings like cilantro, or how messy it is. The same thing happens with opinion questions, where it would state one opinion as a fact.
+**Why small AIs do this:** they're trained to always give *an* answer, and the most likely-sounding sentence after "why doesn't he like tacos?" is a reason, not "I don't know".
+**Fix:**
+- **All answers:** the instructions now say "don't guess someone's reasons or feelings as if you knew them".
+- **Why-someone questions** ("why does [someone] like / hate / feel…", "why does my teacher / mom / friend…"): it's also told it can't know the real reason, and to give 3 or 4 possible reasons and ask what you think.
+- **Opinion questions** ("best", "better", "should I", "is it worth"…): it's told to give what it depends on, with a good point for each side.
+- **A check:** if the answer still sounds certain (it has none of the words "might", "could", "some people", "depends", "possible"…), it's asked once more with just the question and those instructions.
+
+Science "why" questions ("why is the sky blue", "why do they put salt on roads") aren't caught, because they have real answers.
+**Tested:** 22 questions sorted into why-someone, opinion or normal (all right after two fixes: "Why does my teacher give so much homework?" was missed at first, and "why do they put salt on roads" was wrongly caught), and a pretend model that answered "because they are unhealthy" (it was asked again and gave possible reasons).
+
+### 37. "Is a 2-3 hour drive long?" = −1
+**Problem:** the math finder read every "number-number" as a subtraction, so a lot of normal questions got "worked out", and the AI was told to *use* the answer:
+- "Is a 2-3 hour drive long?" → 2 − 3 = −1
+- "a good 3D printer for $300-400" → −100
+- "what happened on 11/27" → 0.407
+- "Windows 10/11" → 0.909
+- "the game ended 3-2" → 1
+- "a 2 x 4 piece of wood" → 8
+- "open 24/7" → 3.43
+
+**Fix:** `-`, `/` and an `x` meaning "times" only count as math when it's clearly a math question: right after words like "what is", "calculate" or "solve", or when the message is only math. They don't count when a word comes straight after ("2-3 hours"), or after words like "$", "Windows", "ages" or "score". `+`, `*` and `^` still always count.
+**Tested:** those 7 (all left alone now), 11 real math questions like "whats 5-3", "calculate 100 - 37" and "what is 10/4" (all still worked out), and the 30 everyday questions from #27.
+
+### 38. More bugs from reading the chat code line by line
+1. **The spelling fixer could change names.** "Akshaj" is close enough to "Akash" that the safety check let it through, so the AI would answer about someone else. Now any word you typed with a capital letter in the middle of a sentence (like "Akshaj" or "Micro Center") must stay exactly the same.
+2. **An empty answer was sent to the AI as history.** If you pressed Stop before it wrote anything, the next question sent the model an empty reply, which can confuse it. Now only answers with words in them count.
+3. **A failed title showed an error under a good answer.** If the model timed out while naming the chat, the whole message said "the model took too long", even though the answer was fine. Now the chat just keeps the first words of your question as its title.
+4. **Read aloud lost its Stop button.** The page redraws while an answer is written, which reset the button to "Read aloud" even though it was still talking. Pressing it then started reading again instead of stopping. Now the button keeps saying "Stop reading".
+5. **Long messages were cut off without telling you.** The Pi keeps the first 600 characters, but the box let you type more. Now the box stops at 600.
+
+**Tested:** each one with a pretend model (the empty-history test was redone after the first version didn't really test an empty answer), plus all 14 chat tests again.
+
+### 39. Follow-up suggestions
+**Goal:** like Gemini, suggest what to ask next, so you can keep exploring with one tap.
+**How:** after the answer, the AI is asked for 2 short follow-up questions. They're cleaned up (no numbers or bullets, 3 to 14 words, not a refusal, not your own question again) and shown as buttons.
+**Problem:** on a Pi, this takes about 5 to 10 seconds, and you'd have to wait for it before asking your next question. **Fix:** while it's thinking of suggestions, the Send button already works. Sending skips the suggestions (it hangs up on the model, like Stop does).
+
+### 40. Two answers to pick from
+**Goal:** like Gemini and ChatGPT, sometimes show two answers and let you choose.
+**How:** about 1 in 4 single questions also gets a second answer. One is *careful* (temperature 0.4: it picks the most likely words) and one is *creative* (temperature 0.95: it takes more chances). They're shown in a random order, so you can't tell which is which. The one you pick becomes the answer that the chat remembers. The sidebar counts how often you pick careful or creative answers. After a while, that tells you which you really prefer.
+**Problems handled:** pressing Stop while it writes the second answer keeps just the first one. A restart in the middle does the same. You can't pick twice. Math questions never get two answers, since the math is the same either way.
+**Tested:** 12 tests with a pretend model, and clicking through it in a browser: two answers side by side, picking one, the other tucked away, the count in the sidebar, and tapping a suggestion to ask it.

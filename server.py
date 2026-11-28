@@ -344,7 +344,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(200, lab.chatbot_status())
             if path == "/api/chat/send":
                 try:
-                    cid = lab.chat.send(body.get("text", ""), body.get("chat") or None)
+                    cid = lab.chat.send(body.get("text", ""), body.get("chat") or None,
+                                        compare=body.get("compare", True) is not False, suggest=body.get("suggest", True) is not False)
                 except ValueError as e:
                     return self._send(400, {"error": str(e)})
                 if not cid:
@@ -358,6 +359,14 @@ class Handler(BaseHTTPRequestHandler):
                 if not cid:
                     return self._send(409, {"error": "Wait until it finishes answering."})
                 return self._send(200, lab.chat.status(cid))
+            if path == "/api/chat/pick":
+                try:
+                    ok = lab.chat.pick(str(body.get("chat", "")), float(body.get("time", 0)), int(body.get("index", -1)), str(body.get("which", "")))
+                except (TypeError, ValueError):
+                    ok = False
+                if not ok:
+                    return self._send(409, {"error": "That answer can't be picked (it may still be writing, or you already picked one)."})
+                return self._send(200, lab.chat.status(str(body.get("chat", ""))))
             if path == "/api/chat/rename":
                 return self._send(200, {"ok": lab.chat.rename(str(body.get("chat", "")), body.get("title", ""))})
             if path == "/api/chat/delete":
