@@ -288,7 +288,7 @@ A refusal counts as having a reason if it says something like "because", "danger
 - **A check:** if the answer still sounds certain (it has none of the words "might", "could", "some people", "depends", "possible"…), it's asked once more with just the question and those instructions.
 
 Science "why" questions ("why is the sky blue", "why do they put salt on roads") aren't caught, because they have real answers.
-**Tested:** 22 questions sorted into why-someone, opinion or normal (all right after two fixes: "Why does my teacher give so much homework?" was missed at first, and "why do they put salt on roads" was wrongly caught), and a pretend model that answered "because they are unhealthy" (it was asked again and gave possible reasons).
+**Tested:** 19 different questions sorted into why-someone, opinion or normal (all right after two fixes: "Why does my teacher give so much homework?" was missed at first, and "why do they put salt on roads" was wrongly caught), and a pretend model that answered "because they are unhealthy" (it was asked again and gave possible reasons).
 
 ### 37. "Is a 2-3 hour drive long?" = −1
 **Problem:** the math finder read every "number-number" as a subtraction, so a lot of normal questions got "worked out", and the AI was told to *use* the answer:
