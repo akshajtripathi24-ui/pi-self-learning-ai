@@ -25,7 +25,28 @@ button{background:var(--accent);color:#04131a;border:0;border-radius:8px;padding
 button.ghost{background:transparent;color:var(--accent);border:1px solid #155e75}
 button.small{padding:5px 10px;font-size:13px}
 button:disabled{opacity:.4;cursor:default}
-select,input[type=number],input[type=text]{padding:7px 9px;border-radius:8px;border:1px solid var(--line);background:#0b1222;color:var(--text);font-size:14px}
+select,input[type=number],input[type=text],input[type=email],input[type=password],textarea.field{padding:7px 9px;border-radius:8px;border:1px solid var(--line);background:#0b1222;color:var(--text);font-size:14px;font-family:inherit}
+.field{display:block;width:100%;margin-top:6px;font-size:16px!important;padding:10px 12px!important}
+.authbox{max-width:460px;margin:10px auto}
+.authbox h3{margin:0 0 4px;font-size:24px}
+.authbox .step{font-size:12px;font-weight:800;letter-spacing:.1em;color:var(--accent);text-transform:uppercase}
+.authbox label,.setcard label{display:block;margin-top:12px;font-size:13px;color:var(--muted);font-weight:700}
+.authbox button.go{width:100%;margin-top:14px;padding:11px;font-size:16px}
+.linkish{background:none;border:0;color:var(--accent);padding:0;font-weight:700;cursor:pointer;font-size:14px;margin-top:12px}
+.acct{display:flex;align-items:center;gap:12px;width:100%;text-align:left;background:#0b1222;border:1px solid var(--line);color:var(--text);border-radius:12px;padding:10px 12px;margin-top:8px;font-weight:800;font-size:16px}
+.acct:hover{border-color:#155e75}
+.avatar{display:inline-flex;align-items:center;justify-content:center;border-radius:50%;overflow:hidden;flex:none;color:#fff;font-weight:900}
+.avatar img{width:100%;height:100%;object-fit:cover}
+.me{display:flex;align-items:center;gap:8px}
+.err{color:var(--bad);font-size:14px;margin-top:10px;min-height:18px}
+.good{color:var(--good);font-size:14px;margin-top:10px}
+.note{background:#0b1222;border:1px solid var(--line);border-radius:10px;padding:10px 12px;font-size:13px;color:var(--muted);margin-top:12px}
+.uses{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+.uses label{display:flex;align-items:center;gap:6px;margin:0;background:#0b1222;border:1px solid var(--line);border-radius:999px;padding:6px 12px;color:var(--text);font-size:14px;font-weight:600;cursor:pointer}
+.uses label:has(input:checked){border-color:var(--accent);color:var(--accent)}
+.emojis{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.emojis button{background:#0b1222;border:1px solid var(--line);font-size:22px;padding:4px 8px}
+.secret{font-family:ui-monospace,monospace;font-size:18px;letter-spacing:.08em;background:#0b1222;border:1px dashed #155e75;border-radius:8px;padding:8px 10px;margin-top:8px;word-break:break-all}
 .bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:10px}
 .stats{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .stat{background:#0b1222;border:1px solid var(--line);border-radius:10px;padding:9px 11px}
@@ -104,7 +125,8 @@ footer{text-align:center;color:var(--muted);font-size:12px;padding:20px}footer a
 <body>
 <header>
   <h1>🧠 Pi Self-Learning AI</h1>
-  <div class="tabs"><button id="tab-math" class="on">🧮 Math AI</button><button id="tab-bot">💬 Chatbot</button><button id="tab-col">🔬 Collapse experiment</button><button id="tab-chat">🗨️ Chat</button></div>
+  <div class="tabs"><button id="tab-math" class="on">🧮 Math AI</button><button id="tab-bot">💬 Chatbot</button><button id="tab-col">🔬 Collapse experiment</button><button id="tab-chat">🗨️ Chat</button><button id="tab-settings">⚙️ Settings</button></div>
+  <div class="me" id="mebox"></div>
 </header>
 
 <!-- ============================================================ part 1: the self-taught math AI -->
@@ -147,6 +169,81 @@ footer{text-align:center;color:var(--muted);font-size:12px;padding:20px}footer a
     <p class="muted" style="margin-top:0">Course 1: <code>47+38</code>, <code>500-123</code>. Course 2: <code>7*8</code>, <code>47*8</code>, <code>3x+5=20</code>, <code>d/dx 4x^3</code>, <code>d/dx 3x^2-5x</code>. Course 3: <code>2.5+1.7</code>, <code>38.6-12.9</code>, <code>4.5*6</code>, <code>x^2-5x+6=0</code>, <code>integral of 6x^2</code>, <code>d/dx x^3-4x^2+7x</code></p>
     <div class="row"><div><input type="text" id="qtext" value="47+38" aria-label="Your question"></div><div style="flex:0 0 auto"><button id="qgo">Ask</button></div></div>
     <div id="qout" class="msg"></div>
+  </section>
+</main>
+
+<!-- ============================================================ part 5: signing in -->
+<main id="page-auth" class="hide">
+  <section class="card full"><div class="authbox" id="authbox"></div></section>
+</main>
+
+<!-- ============================================================ part 5: settings -->
+<main id="page-settings" class="hide">
+  <section class="card setcard">
+    <h2>👤 Profile</h2>
+    <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap">
+      <div id="setavatar"></div>
+      <div style="flex:1;min-width:200px">
+        <label for="setname" style="margin-top:0">Your name (the AI uses it)</label>
+        <input type="text" id="setname" class="field" maxlength="40">
+        <div class="muted" id="setuser" style="margin-top:6px"></div>
+      </div>
+    </div>
+    <label>Profile picture</label>
+    <div class="bar" style="margin-top:6px">
+      <button class="ghost small" id="avupload">📷 Upload a picture</button><input type="file" id="avfile" accept="image/*" class="hide">
+      <button class="ghost small" id="avemoji">😀 Pick an emoji</button>
+      <button class="ghost small" id="avnone">Remove it</button>
+    </div>
+    <div id="avpicker" class="hide">
+      <div class="emojis" id="avemojis"></div>
+      <div class="bar"><span class="muted">Colors:</span><input type="color" id="avc1" value="#22d3ee"><input type="color" id="avc2" value="#6366f1"></div>
+    </div>
+    <label for="avdesc">✨ Or describe one, and the AI makes it</label>
+    <div class="bar" style="margin-top:6px"><input type="text" id="avdesc" placeholder="like: a robot astronaut, or a cat that loves space" maxlength="80" style="flex:1;min-width:180px"><button class="small" id="avai">✨ Make it</button></div>
+    <div class="bar"><button id="setsaveprofile">Save profile</button></div>
+    <div class="err" id="setprofilemsg"></div>
+  </section>
+  <section class="card setcard">
+    <h2>🤖 What I use the AI for</h2>
+    <p class="muted" style="margin-top:0">The AI reads this before every answer, so it can help you better. Pick any that fit:</p>
+    <div class="uses" id="setuses"></div>
+    <label for="setabout">Tell the AI more about you (optional)</label>
+    <textarea id="setabout" class="field" rows="4" maxlength="400" placeholder="like: I'm learning SolidWorks and building a Mars rover with an Arduino. Explain things with examples."></textarea>
+    <div class="muted" id="setaboutn" style="font-size:12px;text-align:right">0 / 400</div>
+    <div class="bar"><button id="setsaveabout">Save</button></div>
+    <div class="err" id="setaboutmsg"></div>
+  </section>
+  <section class="card setcard">
+    <h2>✉️ Email</h2>
+    <div class="muted">Your email: <b id="setemail" style="color:var(--text)"></b></div>
+    <label for="setnewemail">Change it to</label>
+    <div class="bar" style="margin-top:6px"><input type="email" id="setnewemail" placeholder="new email" style="flex:1;min-width:180px"><button class="small" id="setemailgo">Send a code</button></div>
+    <div id="setemailcode" class="hide"><label for="setemailc">The code we sent to your new email</label>
+      <div class="bar" style="margin-top:6px"><input type="text" id="setemailc" inputmode="numeric" maxlength="6" placeholder="123456"><button class="small" id="setemailok">Change email</button></div></div>
+    <div class="err" id="setemailmsg"></div>
+  </section>
+  <section class="card setcard">
+    <h2>🔑 Password</h2>
+    <label for="setpw0">Current password</label><input type="password" id="setpw0" class="field" autocomplete="current-password">
+    <label for="setpw1">New password (8 or more characters)</label><input type="password" id="setpw1" class="field" autocomplete="new-password">
+    <label for="setpw2">New password again</label><input type="password" id="setpw2" class="field" autocomplete="new-password">
+    <div class="bar"><button id="setpwgo">Change password</button></div>
+    <div class="err" id="setpwmsg"></div>
+  </section>
+  <section class="card setcard full">
+    <h2>🛡️ Two-step verification</h2>
+    <p class="muted" style="margin-top:0">An extra lock: after your password, you also type a code. Even someone who knows your password can't get in without it.</p>
+    <div id="set2fa"></div>
+    <div class="err" id="set2famsg"></div>
+  </section>
+  <section class="card setcard full">
+    <h2>🚪 Sign out, or delete your account</h2>
+    <div class="bar"><button class="ghost" id="setlogout">Log out</button></div>
+    <label for="setdelpw">Delete this account and all its chats, for good (type your password)</label>
+    <div class="bar" style="margin-top:6px"><input type="password" id="setdelpw" placeholder="password" autocomplete="current-password"><button class="small" id="setdel" style="background:var(--bad)">Delete my account</button></div>
+    <div class="err" id="setdelmsg"></div>
+    <div class="note" id="setprivacy">🔒 Your password is never saved, only a scrambled "fingerprint" of it. Your profile, your chats and what you told the AI are locked with encryption. The key only unlocks when you sign in, so nobody can read them from the Pi's files.</div>
   </section>
 </main>
 
@@ -260,20 +357,29 @@ footer{text-align:center;color:var(--muted);font-size:12px;padding:20px}footer a
 
 <script>
 const $ = id => document.getElementById(id);
-const api = (p, opt) => fetch(p, opt).then(async r => { const j = await r.json(); if (!r.ok) throw new Error(j.error || r.status); return j; });
+const api = (p, opt) => fetch(p, opt).then(async r => {
+  const j = await r.json();
+  if (r.status === 401 && j.login && me && me.signed_in) { me = {signed_in: false}; showMe(); setTab(tab); }   // signed out (like after a restart)
+  if (!r.ok) throw new Error(j.error || r.status);
+  return j;
+});
+let me = null;                                   // who's signed in (from /api/me)
 const post = (p, body) => api(p, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body || {})});
 const esc = s => String(s).replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
 const fmtDur = s => s < 60 ? Math.round(s) + ' s' : s < 3600 ? Math.round(s / 60) + ' min' : s < 86400 ? (s / 3600).toFixed(1) + ' h' : (s / 86400).toFixed(1) + ' days';
 const store = {get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }, set(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }};
 
 // ---------------------------------------------------------------- tabs
-let tab = ['math', 'bot', 'col', 'chat'].includes(store.get('tab')) ? store.get('tab') : 'math';
+const TABS = ['math', 'bot', 'col', 'chat', 'settings'];
+let tab = TABS.includes(store.get('tab')) ? store.get('tab') : 'math';
 function setTab(t) {
   tab = t; store.set('tab', t);
-  ['math', 'bot', 'col', 'chat'].forEach(k => { $('tab-' + k).classList.toggle('on', k === t); $('page-' + k).classList.toggle('hide', k !== t); });
-  refresh();
+  const locked = (t === 'chat' || t === 'settings') && !(me && me.signed_in);     // these need you to sign in
+  TABS.forEach(k => { $('tab-' + k).classList.toggle('on', k === t); $('page-' + k).classList.toggle('hide', k !== t || locked); });
+  $('page-auth').classList.toggle('hide', !locked);
+  if (locked) renderAuth(); else refresh();
 }
-['math', 'bot', 'col', 'chat'].forEach(k => $('tab-' + k).onclick = () => setTab(k));
+TABS.forEach(k => $('tab-' + k).onclick = () => setTab(k));
 
 // ---------------------------------------------------------------- a line chart with a hover tooltip (one axis, recessive grid)
 function lineChart(box, series, o) {
@@ -540,8 +646,8 @@ async function loadChat() {
     }
   }
   const speed = c.speed ? ` · ${c.speed} tokens a second` : '';
-  const here = !c.busy_chat || c.busy_chat === chatId;
-  $('chatstage').textContent = !c.busy || c.stage === 'suggesting' ? '' : !here ? '⏳ It\'s answering in another chat. Wait a moment…' :
+  const here = !c.someone_else && (!c.busy_chat || c.busy_chat === chatId);
+  $('chatstage').textContent = !c.busy || c.stage === 'suggesting' ? '' : c.someone_else ? '⏳ The AI is answering someone else on this Pi. One moment…' : !here ? '⏳ It\'s answering in another chat. Wait a moment…' :
     (c.stage === 'fixing' ? '✏️ Fixing the spelling and grammar… ' : c.stage === 'answering' ? '🤔 Thinking… ' : c.stage === 'writing' ? '✍️ Writing… ' : c.stage === 'explaining' ? '🤔 It said no, so it\'s working out why… ' : c.stage === 'balancing' ? '⚖️ It guessed one reason, so it\'s looking at the different possibilities… ' : c.stage === 'second' ? '🆚 Writing a second answer for you to compare… ' : c.stage === 'suggesting' ? '' : c.stage === 'titling' ? '🏷️ Naming this chat (you can already ask your next one)… ' : '⏳ Getting ready… ') + (c.stage_seconds || 0) + ' s' + speed;
   const suggesting = c.busy && ['suggesting', 'titling'].includes(c.stage);   // you can already send your next question
   $('chatsend').disabled = c.busy && !suggesting;
@@ -632,15 +738,202 @@ $('chatdelete').onclick = async () => {
   try { await post('/api/chat/delete', {chat: chatId}); openChat(null); } catch (e) { alert(e.message); }
 };
 
+// ---------------------------------------------------------------- part 5: accounts
+function avatarHtml(av, size, name) {
+  const st = `width:${size}px;height:${size}px;font-size:${Math.round(size * .55)}px`;
+  if (av && av.kind === 'image') return `<span class="avatar" style="${st}"><img src="${esc(av.data)}" alt=""></span>`;
+  if (av && av.kind === 'emoji') return `<span class="avatar" style="${st};background:linear-gradient(135deg,${esc(av.c1)},${esc(av.c2)})">${esc(av.emoji)}</span>`;
+  return `<span class="avatar" style="${st};font-size:${Math.round(size * .45)}px;background:linear-gradient(135deg,#155e75,#4338ca)">${esc((name || '?')[0].toUpperCase())}</span>`;
+}
+async function loadMe() { try { me = await api('/api/me'); } catch (e) { me = {signed_in: false}; } showMe(); }
+function showMe() {
+  $('mebox').innerHTML = me && me.signed_in
+    ? `${avatarHtml(me.avatar, 30, me.name)}<b style="font-size:14px">${esc(me.name)}</b><button class="ghost small" id="melogout">Log out</button>`
+    : `<button class="small" id="mesignin">Sign in</button>`;
+  if ($('melogout')) $('melogout').onclick = logout;
+  if ($('mesignin')) $('mesignin').onclick = () => setTab('chat');
+}
+async function logout() {
+  try { await post('/api/auth/logout'); } catch (e) {}
+  me = {signed_in: false}; chat = null; chatId = null; store.set('chat', ''); chatHtml = chatListHtml = '';
+  settingsShown = false; tfa = null; auth = {step: 'email'}; showMe(); setTab(tab);
+}
+async function signedIn() {
+  settingsShown = false; tfa = null;
+  auth = {step: 'email'}; chat = null; chatId = null; store.set('chat', ''); chatHtml = chatListHtml = '';
+  await loadMe(); setTab(tab);
+}
+// signing in: 1. email -> 2. code -> 3. pick an account -> 4. its password (-> 5. two-step code, if it's on)
+let auth = {step: 'email'};
+function renderAuth() {
+  const a = auth, box = $('authbox');
+  const testMode = me && me.email_ready === false;
+  const back = (label, step) => `<button class="linkish" data-step="${step}">${label}</button>`;
+  let h = '';
+  if (a.step === 'email') h = `<div class="step">Step 1 of 2 · your email</div><h3>Sign in</h3>
+      <p class="muted">Type your email and we'll send you a 6-digit code, to prove it's yours. <b>We'll never ask for your email's password</b> (a website that does is probably a scam).</p>
+      <label for="aemail">Email</label><input type="email" id="aemail" class="field" autocomplete="email" value="${esc(a.email || '')}">
+      <button class="go" id="ago">Send me a code</button>
+      ${testMode ? '<div class="note">🧪 Test mode: this Pi isn\'t set up to send emails yet, so the code goes in the Pi\'s log. See docs/08-accounts.md to set up email.</div>' : ''}`;
+  else if (a.step === 'code') h = `<div class="step">Step 1 of 2 · your email</div><h3>Check your email</h3>
+      <p class="muted">${a.how === 'log' ? `🧪 Test mode: the code for <b>${esc(a.sentTo)}</b> is in the Pi's log. On the Pi, run: <code>journalctl -u selflearning -n 5</code>` : `We sent a 6-digit code to <b>${esc(a.sentTo)}</b>. It works for 10 minutes. (Check spam too.)`}</p>
+      <label for="acode">Code</label><input type="text" id="acode" class="field" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="123456">
+      <button class="go" id="ago">Continue</button>${back('← Use a different email', 'email')}`;
+  else if (a.step === 'accounts') h = `<div class="step">Step 2 of 2 · your account</div><h3>Your accounts</h3>
+      <p class="muted">On ${esc(a.sentTo)}. Pick one to sign in, or make a new one.</p>
+      ${a.accounts.map(x => `<button class="acct" data-acct="${esc(x.id)}" data-name="${esc(x.username)}">${avatarHtml(null, 36, x.username)}${esc(x.username)}</button>`).join('')}
+      <button class="acct" id="anew" style="color:var(--accent)">➕ Create a new account</button>${back('← Use a different email', 'email')}`;
+  else if (a.step === 'password') h = `<div class="step">Step 2 of 2 · your account</div><h3>Hi, ${esc(a.username)}!</h3>
+      <label for="apw">Password</label><input type="password" id="apw" class="field" autocomplete="current-password">
+      <button class="go" id="ago">Sign in</button>${back('← Pick another account', 'accounts')}`;
+  else if (a.step === 'signup') h = `<div class="step">Step 2 of 2 · a new account</div><h3>Create an account</h3>
+      <label for="auser">Username (3 to 20 letters or numbers, no spaces)</label><input type="text" id="auser" class="field" maxlength="20" autocomplete="username">
+      <label for="apw">Password (8 or more characters)</label><input type="password" id="apw" class="field" autocomplete="new-password">
+      <label for="apw2">Password again</label><input type="password" id="apw2" class="field" autocomplete="new-password">
+      <div class="note">💡 A good password is a few random words together, like <i>purple-rover-cactus</i>. Don't use one you use anywhere else.</div>
+      <button class="go" id="ago">Create account</button>${back('← Back', 'accounts')}`;
+  else if (a.step === '2fa') h = `<div class="step">One more step</div><h3>Two-step verification</h3>
+      <p class="muted">${a.method === 'app' ? 'Type the code your authenticator app shows for Pi AI.' : a.method === 'phone' ? 'We sent a code to your phone (in the ntfy app).' : a.how === 'log' ? '🧪 Test mode: the code is in the Pi\'s log.' : 'We emailed you another code.'}</p>
+      <label for="acode">Code</label><input type="text" id="acode" class="field" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="123456">
+      <button class="go" id="ago">Finish signing in</button>${back('← Start again', 'email')}`;
+  box.innerHTML = h + `<div class="err" id="aerr">${esc(a.err || '')}</div>`;
+  box.querySelectorAll('[data-step]').forEach(b => b.onclick = () => { auth = {step: b.dataset.step === 'accounts' ? 'accounts' : 'email', email: a.email,
+    token: a.token, accounts: a.accounts, sentTo: a.sentTo}; renderAuth(); });
+  box.querySelectorAll('[data-acct]').forEach(b => b.onclick = () => { Object.assign(auth, {step: 'password', account: b.dataset.acct, username: b.dataset.name, err: ''}); renderAuth(); });
+  if ($('anew')) $('anew').onclick = () => { Object.assign(auth, {step: 'signup', err: ''}); renderAuth(); };
+  if ($('ago')) $('ago').onclick = authGo;
+  box.querySelectorAll('input').forEach(i => i.addEventListener('keydown', e => { if (e.key === 'Enter') authGo(); }));
+  const first = box.querySelector('input'); if (first) first.focus();
+}
+let authBusy = false;
+async function authGo() {
+  if (authBusy) return;
+  const a = auth, v = id => ($(id) ? $(id).value : '');
+  authBusy = true; if ($('ago')) $('ago').disabled = true;
+  try {
+    if (a.step === 'email') {
+      const r = await post('/api/auth/email', {email: v('aemail')});
+      auth = {step: 'code', email: v('aemail'), token: r.token, sentTo: r.sent_to, how: r.how};
+    } else if (a.step === 'code') {
+      const r = await post('/api/auth/email/verify', {token: a.token, code: v('acode')});
+      Object.assign(auth, {step: r.accounts.length ? 'accounts' : 'signup', accounts: r.accounts, err: ''});
+    } else if (a.step === 'password') {
+      const r = await post('/api/auth/login', {token: a.token, account: a.account, password: v('apw')});
+      if (r.need_2fa) Object.assign(auth, {step: '2fa', token: r.token, method: r.need_2fa, how: r.how, err: ''});
+      else return await signedIn();
+    } else if (a.step === 'signup') {
+      if (v('apw') !== v('apw2')) throw new Error("The two passwords don't match.");
+      await post('/api/auth/signup', {token: a.token, username: v('auser'), password: v('apw')});
+      return await signedIn();
+    } else if (a.step === '2fa') {
+      await post('/api/auth/2fa', {token: a.token, code: v('acode')});
+      return await signedIn();
+    }
+    renderAuth();
+  } catch (e) {
+    if (/start again|took too long/i.test(e.message)) { auth = {step: 'email', email: a.email, err: e.message}; renderAuth(); }
+    else { $('aerr').textContent = e.message; if ($('ago')) $('ago').disabled = false; }   // (keep what you typed)
+  } finally { authBusy = false; }
+}
+// ---------------- settings
+const EMOJIS = ['🤖', '🚀', '🛰️', '🪐', '👽', '🐱', '🐶', '🦊', '🐉', '🦉', '⚙️', '💻', '🎮', '⚽', '🏀', '🎸', '📚', '🔬', '🌋', '⭐'];
+let draftAvatar, settingsShown = false;
+function loadSettings() {
+  if (!me || !me.signed_in || settingsShown) return;
+  settingsShown = true;
+  draftAvatar = me.avatar;
+  $('setname').value = me.name; $('setuser').textContent = 'Username: ' + me.username;
+  $('setemail').textContent = me.email;
+  $('setuses').innerHTML = me.use_options.map(u => `<label><input type="checkbox" value="${esc(u)}"${me.uses.includes(u) ? ' checked' : ''}>${esc(u)}</label>`).join('');
+  $('setabout').value = me.about; $('setaboutn').textContent = me.about.length + ' / 400';
+  $('avemojis').innerHTML = EMOJIS.map(e => `<button data-emoji="${e}">${e}</button>`).join('');
+  $('avemojis').querySelectorAll('[data-emoji]').forEach(b => b.onclick = () => { draftAvatar = {kind: 'emoji', emoji: b.dataset.emoji, c1: $('avc1').value, c2: $('avc2').value}; showDraft(); });
+  showDraft(); show2fa();
+}
+function showDraft() { $('setavatar').innerHTML = avatarHtml(draftAvatar, 96, $('setname').value || me.name); }
+const say_ = (id, text, ok) => { $(id).textContent = text; $(id).className = ok ? 'good' : 'err'; };
+async function act(id, fn, done) {            // run an action, and show what happened under it
+  try { const r = await fn(); say_(id, done || '✅ Saved', true); return r; } catch (e) { say_(id, '❌ ' + e.message); }
+}
+$('setname').oninput = showDraft;
+for (const id of ['avc1', 'avc2']) $(id).oninput = () => { if (draftAvatar && draftAvatar.kind === 'emoji') { draftAvatar = Object.assign({}, draftAvatar, {c1: $('avc1').value, c2: $('avc2').value}); showDraft(); } };
+$('avemoji').onclick = () => $('avpicker').classList.toggle('hide');
+$('avnone').onclick = () => { draftAvatar = null; showDraft(); };
+$('avupload').onclick = () => $('avfile').click();
+$('avfile').onchange = () => {                 // shrink it to 128 x 128 before sending (small and fast)
+  const f = $('avfile').files[0]; if (!f) return;
+  const img = new Image();
+  img.onload = () => { const c = document.createElement('canvas'); c.width = c.height = 128; const s = Math.min(img.width, img.height);
+    c.getContext('2d').drawImage(img, (img.width - s) / 2, (img.height - s) / 2, s, s, 0, 0, 128, 128);
+    draftAvatar = {kind: 'image', data: c.toDataURL('image/jpeg', 0.85)}; showDraft(); URL.revokeObjectURL(img.src); };
+  img.onerror = () => say_('setprofilemsg', "❌ That file isn't a picture this browser can open.");
+  img.src = URL.createObjectURL(f);
+};
+$('avai').onclick = async () => {
+  $('avai').disabled = true; say_('setprofilemsg', '✨ The AI is picking one…', true);
+  const r = await act('setprofilemsg', () => post('/api/me/avatar/ai', {description: $('avdesc').value}), '✨ Here it is! Press Save profile to keep it.');
+  if (r) { draftAvatar = r; $('avc1').value = r.c1; $('avc2').value = r.c2; showDraft(); }
+  $('avai').disabled = false;
+};
+$('setsaveprofile').onclick = async () => { const r = await act('setprofilemsg', () => post('/api/me/update', {name: $('setname').value, avatar: draftAvatar})); if (r) { me = Object.assign(me, r); showMe(); } };
+$('setabout').oninput = () => $('setaboutn').textContent = $('setabout').value.length + ' / 400';
+$('setsaveabout').onclick = async () => {
+  const uses = [...$('setuses').querySelectorAll('input:checked')].map(i => i.value);
+  const r = await act('setaboutmsg', () => post('/api/me/update', {uses, about: $('setabout').value}), '✅ Saved. The AI will use this from your next question.');
+  if (r) me = Object.assign(me, r);
+};
+let emailToken = null;
+$('setemailgo').onclick = async () => {
+  const r = await act('setemailmsg', () => post('/api/me/email', {email: $('setnewemail').value}), '✉️ Code sent. Type it below.');
+  if (r) { emailToken = r.token; $('setemailcode').classList.remove('hide'); if (r.how === 'log') say_('setemailmsg', "🧪 Test mode: the code is in the Pi's log.", true); }
+};
+$('setemailok').onclick = async () => {
+  const r = await act('setemailmsg', () => post('/api/me/email/verify', {token: emailToken, code: $('setemailc').value}), '✅ Email changed.');
+  if (r) { me = Object.assign(me, r); $('setemail').textContent = me.email; $('setemailcode').classList.add('hide'); $('setnewemail').value = $('setemailc').value = ''; }
+};
+$('setpwgo').onclick = async () => {
+  if ($('setpw1').value !== $('setpw2').value) return say_('setpwmsg', "❌ The two new passwords don't match.");
+  const r = await act('setpwmsg', () => post('/api/me/password', {old: $('setpw0').value, new: $('setpw1').value}), '✅ Password changed.');
+  if (r) $('setpw0').value = $('setpw1').value = $('setpw2').value = '';
+};
+let tfa = null;                                // turning on two-step verification
+function show2fa() {
+  const box = $('set2fa'), on = me.twofa !== 'off';
+  const names = {app: '📱 Authenticator app', email: '✉️ Email code', phone: '🔔 Phone (ntfy app)'};
+  let h = `<div class="muted">Right now: <b style="color:${on ? 'var(--good)' : 'var(--text)'}">${on ? 'On, with ' + names[me.twofa] : 'Off'}</b></div>`;
+  if (!tfa) {
+    h += on ? `<label for="tfaoffpw">To turn it off, type your password</label><div class="bar" style="margin-top:6px"><input type="password" id="tfaoffpw"><button class="small ghost" id="tfaoff">Turn off</button></div>`
+            : `<div class="bar">${Object.entries(names).map(([k, n]) => `<button class="ghost small" data-tfa="${k}">${n}</button>`).join('')}</div>
+               <p class="muted" style="font-size:13px">📱 An authenticator app (like Google Authenticator or Microsoft Authenticator, ask a parent first) is the safest. Text messages would need a paid service, so the phone option uses the free ntfy app instead.</p>`;
+  } else {
+    if (tfa.method === 'app') h += `<ol class="muted" style="padding-left:20px"><li>In your authenticator app, add an account, and choose to type a key.</li><li>Type this key (or on a phone, <a href="${esc(tfa.link)}" style="color:var(--accent)">tap here</a>):</li></ol><div class="secret">${esc(tfa.secret.match(/.{1,4}/g).join(' '))}</div>`;
+    if (tfa.method === 'email') h += `<p class="muted">${tfa.how === 'log' ? "🧪 Test mode: the code is in the Pi's log." : 'We sent a code to your email.'}</p>`;
+    if (tfa.method === 'phone') h += `<ol class="muted" style="padding-left:20px"><li>Install the free <b>ntfy</b> app on your phone.</li><li>Subscribe to this topic (it's secret, like a password):</li></ol><div class="secret">${esc(tfa.topic)}</div><div class="bar"><button class="ghost small" id="tfasend">Send me the code</button></div>`;
+    h += `<label for="tfacode">Type the code to turn it on</label><div class="bar" style="margin-top:6px"><input type="text" id="tfacode" inputmode="numeric" maxlength="6" placeholder="123456"><button class="small" id="tfaok">Turn on</button><button class="small ghost" id="tfacancel">Cancel</button></div>`;
+  }
+  box.innerHTML = h;
+  box.querySelectorAll('[data-tfa]').forEach(b => b.onclick = async () => { const r = await act('set2famsg', () => post('/api/me/2fa', {method: b.dataset.tfa}), ' '); if (r) { tfa = r; show2fa(); } });
+  if ($('tfasend')) $('tfasend').onclick = () => act('set2famsg', () => post('/api/me/2fa/phone', {token: tfa.token}), '🔔 Sent! Check the ntfy app.');
+  if ($('tfaok')) $('tfaok').onclick = async () => { const r = await act('set2famsg', () => post('/api/me/2fa/verify', {token: tfa.token, code: $('tfacode').value}), '✅ Two-step verification is on.'); if (r) { me = Object.assign(me, r); tfa = null; show2fa(); } };
+  if ($('tfacancel')) $('tfacancel').onclick = () => { tfa = null; say_('set2famsg', ''); show2fa(); };
+  if ($('tfaoff')) $('tfaoff').onclick = async () => { const r = await act('set2famsg', () => post('/api/me/2fa/off', {password: $('tfaoffpw').value}), 'Two-step verification is off.'); if (r) { me = Object.assign(me, r); show2fa(); } };
+}
+$('setlogout').onclick = logout;
+$('setdel').onclick = async () => {
+  if (!confirm('Delete your account and ALL its chats? This can\'t be undone.')) return;
+  const r = await act('setdelmsg', () => post('/api/me/delete', {password: $('setdelpw').value}), 'Deleted.');
+  if (r) { settingsShown = false; logout(); }
+};
+
 // ---------------------------------------------------------------- start
-function refresh() { ({math: loadMath, bot: loadBot, col: loadCol, chat: loadChat})[tab](); }
-setTab(tab);
+function refresh() { ({math: loadMath, bot: loadBot, col: loadCol, chat: loadChat, settings: loadSettings})[tab](); }
+loadMe().then(() => setTab(tab));
 setInterval(() => { if (tab === 'math') loadMath(); }, 1500);
 setInterval(() => { if (tab === 'bot') loadBot(); }, 3000);
 setInterval(() => { if (tab === 'col') loadCol(); }, 3000);
 let chatLast = 0;
 setInterval(() => {                     // 3 times a second while it writes (smooth live typing), every 1.5 s otherwise
-  if (tab === 'chat' && ((chat && chat.busy) || Date.now() - chatLast > 1500)) { chatLast = Date.now(); loadChat(); }
+  if (tab === 'chat' && me && me.signed_in && ((chat && chat.busy) || Date.now() - chatLast > 1500)) { chatLast = Date.now(); loadChat(); }
 }, 300);
 window.addEventListener('resize', refresh);
 </script>

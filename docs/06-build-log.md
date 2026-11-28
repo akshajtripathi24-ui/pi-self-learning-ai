@@ -350,3 +350,32 @@ On a real Pi, one practice request takes 15 to 60 seconds, so the difference the
 - Some models wrap it in bold, `**Follow-up questions:**`, which left stray `**` on the suggestions. Those are removed now.
 
 **Tested:** 8 checks with a pretend model (the follow-ups never show in the answer; the suggestions appear while it's still naming the chat; a correctly spelled question skips the fix, and a misspelled one doesn't; sending while it writes the follow-ups goes through at once; a model that ignores the format still gets suggestions). Plus the 14 chat tests, the 30 math questions, and a click-through in a browser.
+
+### 43. Accounts, without ever asking for an email password
+**Goal:** accounts like a real chatbot: sign up, log out, sign back in, with 2 layers of security (your email, then the account), plus two-step verification.
+**The first plan, and why we changed it:** the idea was to sign in to your email *with your email's password* on the website. But that's exactly what scam websites do ("phishing"), so people should learn to never type their email password into a site that isn't their email. And if the Pi were ever hacked, every saved email password would be stolen. (Gmail also doesn't allow it any more.) Real websites prove you own an email by **sending a code to it**, so that's layer 1. Layer 2 is the account's own password.
+**How it keeps things private:**
+- **Passwords** are never saved, only a "fingerprint" made with **scrypt**, which is slow on purpose, so trying millions of guesses would take years.
+- **Profiles, settings and chats** are locked with **AES-GCM** encryption. The key is locked with your password, so it only exists in memory while you're signed in.
+- **Emails** are saved as fingerprints, and **usernames** are locked with a key made from the email, so the list of accounts only appears once you've proved the email is yours.
+- Each locked box is tied to its account. We tested that a box copied into another account refuses to open.
+
+**Tested:** the authenticator-app codes against the official test numbers in the standard (RFC 6238), and a 28-step test through the real server: all 28 passed. See [8. Accounts and Settings](08-accounts.md).
+
+### 44. Bugs found while building accounts
+1. **An error wiped what you typed.** If you made a mistake (like two passwords that didn't match), the whole sign-in form was redrawn, so your username and both passwords disappeared. Found by the browser test. Now the error just appears under the form.
+2. **Someone could use the Pi to spam emails.** The "1 code every 30 seconds" limit was per email address, so typing lots of different addresses could send lots of emails. Now there's also a limit for the whole Pi: 20 codes every 10 minutes.
+3. **A sign-in that ran out left the chats unlocked.** After 7 days, a sign-in expires, but the chats' key stayed in memory. Now it's forgotten, just like when you log out.
+4. **My own fix for #3 had a bug.** The cleanup that signs out expired sessions was also used in 3 other places that ignored the result, so a session could be removed there without its chats getting locked. Now there are two separate cleanups: one for old codes, and one (only used in one place) for expired sessions.
+5. **The settings file will hold the email app password,** so the Pi now makes `config.json` readable only by its owner. We also checked that no page ever sends the settings to a browser.
+6. **Any request could be as big as you wanted.** Now anything over 300 KB is refused (a profile picture is about 60 KB).
+7. **Stop could stop someone else's answer.** With accounts, ⏹️ Stop now only stops your own.
+
+### 45. Settings: your profile, your picture, and "what I use the AI for"
+**Goal:** a Settings tab to edit your info, and a way to tell the AI what you use it for, so it can help you better.
+**How:**
+- **What I use the AI for:** pick from options (school homework, robotics, coding, space…) and add your own words (up to 400 characters). Before every answer, the AI is told your name, what you picked and what you wrote, and to use it to help you, but not to repeat it back.
+- **Profile pictures:** upload one (the page shrinks it to 128 × 128 first, so it's small), pick an emoji on two colors, or describe one and let the AI make it.
+- **"The AI makes it", honestly:** a 0.5B language model can't draw. But it can *choose*: it's asked for an emoji and two colors that match your description, like "a robot astronaut" → 🤖 on blue and pink. If it doesn't follow the format, the Pi picks an emoji by keyword (robot → 🤖, cat → 🐱, rocket → 🚀).
+
+**Tested:** the AI's instructions really include what you wrote (checked with a pretend model that records what it's told), and a click-through in a browser: saving "what I use the AI for", making a picture with the AI, and seeing it in the top bar.

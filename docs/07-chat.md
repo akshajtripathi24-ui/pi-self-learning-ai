@@ -3,8 +3,10 @@
 The **🗨️ Chat** tab lets you type any question to the same AI model the Chatbot tab uses (Qwen 2.5, running on your Pi). You can make spelling and grammar mistakes, and ask more than one question at once.
 
 ## Your chats
+**You need to sign in to chat** (see [8. Accounts and Settings](08-accounts.md)). Each account only sees its own chats, and they're saved locked (encrypted), so nobody can read them from the Pi's files.
+
 Like other chatbots, you can have lots of separate chats:
-- **➕ New chat** starts a fresh one. It's saved on the Pi when you send your first message (in `data/chats/`, one file per chat), so it's still there after a restart.
+- **➕ New chat** starts a fresh one. It's saved on the Pi when you send your first message (in `data/chats/`, one locked file per chat), so it's still there after a restart.
 - **🏷️ Titles:** after your first question, the AI writes a short title for the chat, like "Mars rover speed". If its title is too long or looks like an answer, it uses the first few words of your question instead. **✏️ Rename** changes it.
 - **🔍 Search** finds chats by their title, and **🗑️ Delete** removes a chat for good.
 - **Memory in a chat:** it remembers the last 3 questions and answers in the same chat, so follow-ups like "and how heavy is it?" work.

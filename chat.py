@@ -19,7 +19,10 @@ import secrets
 import threading
 import time
 
+import shutil
+
 import mathengine
+from accounts import seal, unseal
 from chatbot import similar
 
 FIX_PROMPT = """Fix the spelling and grammar mistakes in the text. Keep the same meaning and the same questions.
@@ -321,19 +324,13 @@ class Chat:
     def __init__(self, bot, folder, tutor=None):
         self.bot = bot                     # the self-quizzing chatbot: we share its connection to the model
         self.tutor = tutor                 # asks your trained math AI, if the question is something it practices
-        self.folder = folder               # one file per chat, so they're kept after a restart
+        self.folder = folder               # data/chats/<account>/: one locked (encrypted) file per chat
         os.makedirs(folder, exist_ok=True)
         self.lock = threading.Lock()
-        self.chats = {}
-        for name in os.listdir(folder):
-            if name.endswith(".json"):
-                try:
-                    with open(os.path.join(folder, name)) as f:
-                        c = json.load(f)
-                    self._tidy(c)
-                    self.chats[c["id"]] = c
-                except (OSError, ValueError, KeyError):
-                    pass
+        self.chats = {}                    # the chats of everyone signed in right now
+        self.keys = {}                     # account -> its key (only in memory, only while it's signed in)
+        self.notes = {}                    # account -> what its settings tell the AI about them
+        self.leaving = set()               # accounts that signed out while their answer was still being written
         self.busy, self.busy_chat = False, None
         self.stage, self.stage_since = None, 0
         self.stop_asked = False
@@ -354,6 +351,81 @@ class Chat:
             if not last.get("answers") and not last.get("error") and not last.get("stopped"):
                 last["error"] = "The Pi restarted before it answered. Press 🔄 Try again."
 
+    # ------------------------------------------------------------ accounts: unlocking and locking their chats
+    def load_user(self, owner, key, profile=None, first_ever=False):
+        """Someone signed in: unlock their chats with their key."""
+        folder = os.path.join(self.folder, owner)
+        os.makedirs(folder, exist_ok=True)
+        loaded = {}
+        for name in os.listdir(folder):
+            if name.endswith(".json"):
+                try:
+                    with open(os.path.join(folder, name)) as f:
+                        c = unseal(key, json.load(f)["blob"], name[:-5])
+                    c["owner"] = owner
+                    self._tidy(c)
+                    loaded[c["id"]] = c
+                except Exception:
+                    pass                                   # (a damaged file is skipped, not fatal)
+        with self.lock:
+            self.keys[owner] = key
+            self.leaving.discard(owner)
+            for cid, c in loaded.items():
+                if cid not in self.chats:                  # (already open from another browser: keep that copy)
+                    self.chats[cid] = c
+            if first_ever:
+                self._adopt_old_chats(owner)
+        if profile is not None:
+            self.set_profile(owner, profile)
+
+    def _adopt_old_chats(self, owner):
+        """Chats from before accounts existed (not locked) go to the first account made on this Pi, and get locked."""
+        for name in os.listdir(self.folder):
+            path = os.path.join(self.folder, name)
+            if name.endswith(".json") and os.path.isfile(path):
+                try:
+                    with open(path) as f:
+                        c = json.load(f)
+                    c["owner"] = owner
+                    self._tidy(c)
+                    self.chats[c["id"]] = c
+                    self._save(c)
+                    os.remove(path)
+                except (OSError, ValueError, KeyError):
+                    pass
+
+    def unload_user(self, owner):
+        """They signed out: forget their key and close their chats (after any answer still being written is saved)."""
+        with self.lock:
+            if self.busy and self.chats.get(self.busy_chat, {}).get("owner") == owner:
+                self.leaving.add(owner)                    # _work finishes it off
+                return
+            self._unload(owner)
+
+    def _unload(self, owner):
+        for cid in [cid for cid, c in self.chats.items() if c.get("owner") == owner]:
+            del self.chats[cid]
+        self.keys.pop(owner, None)
+        self.notes.pop(owner, None)
+        self.leaving.discard(owner)
+
+    def delete_user(self, owner):
+        with self.lock:
+            self._unload(owner)
+        shutil.rmtree(os.path.join(self.folder, owner), ignore_errors=True)
+
+    def set_profile(self, owner, profile):
+        """What the AI is told about you, from Settings: your name, what you use it for, and anything you wrote."""
+        bits = []
+        if profile.get("name"):
+            bits.append("Their name is %s." % profile["name"])
+        if profile.get("uses"):
+            bits.append("They use this AI for: %s." % ", ".join(profile["uses"]))
+        if profile.get("about"):
+            bits.append("In their own words: %s" % profile["about"][:400])
+        self.notes[owner] = ("\nAbout the student, from their settings (use it to help them, but don't repeat it back): "
+                             + " ".join(bits)) if bits else ""
+
     # ------------------------------------------------------------ saving and listing chats
     def save_all(self):
         """When the program is shut down (like for an update), save what's been written so far."""
@@ -363,52 +435,65 @@ class Chat:
                     self._save(c)
 
     def _save(self, chat):
-        path = os.path.join(self.folder, chat["id"] + ".json")
+        """Locked with its owner's key, so nobody can read it without signing in (not even with the SD card)."""
+        key = self.keys.get(chat.get("owner"))
+        if not key:
+            return
+        folder = os.path.join(self.folder, chat["owner"])
+        os.makedirs(folder, exist_ok=True)
+        path = os.path.join(folder, chat["id"] + ".json")
         with open(path + ".tmp", "w") as f:
-            json.dump(chat, f)
+            json.dump({"v": 1, "blob": seal(key, chat, chat["id"])}, f)
         os.replace(path + ".tmp", path)
 
-    def _list(self):
-        rows = sorted(self.chats.values(), key=lambda c: -c["updated"])
+    def _mine(self, owner, chat_id):
+        c = self.chats.get(chat_id)
+        return c if c and c.get("owner") == owner else None
+
+    def _list(self, owner):
+        rows = sorted((c for c in self.chats.values() if c.get("owner") == owner), key=lambda c: -c["updated"])
         return [{"id": c["id"], "title": c["title"], "updated": c["updated"], "count": len(c["messages"])} for c in rows]
 
-    def status(self, chat_id=None):
+    def status(self, owner, chat_id=None):
         with self.lock:
-            c = self.chats.get(chat_id)
+            c = self._mine(owner, chat_id)
             chat = json.loads(json.dumps({"id": c["id"], "title": c["title"], "messages": c["messages"][-60:]})) if c else None
-            return {"chats": self._list(), "chat": chat,      # (a copy: the answer keeps changing while it's written)
-                    "busy": self.busy, "busy_chat": self.busy_chat, "stage": self.stage,
-                    "stage_seconds": round(time.time() - self.stage_since) if self.stage else None,
-                    "speed": self.bot.llm.speed, "model": self.bot.llm.model_name, "picks": self.picks()}
+            mine = self.busy and self.chats.get(self.busy_chat, {}).get("owner") == owner
+            return {"chats": self._list(owner), "chat": chat,      # (a copy: the answer keeps changing while it's written)
+                    "busy": self.busy, "busy_chat": self.busy_chat if mine else None, "someone_else": self.busy and not mine,
+                    "stage": self.stage if mine else None,
+                    "stage_seconds": round(time.time() - self.stage_since) if self.stage and mine else None,
+                    "speed": self.bot.llm.speed, "model": self.bot.llm.model_name, "picks": self.picks(owner)}
 
-    def _new(self):
+    def _new(self, owner):
         cid = time.strftime("%Y%m%d-%H%M%S") + "-" + secrets.token_hex(2)
-        c = {"id": cid, "title": "New chat", "titled": False, "created": time.time(), "updated": time.time(), "messages": []}
+        c = {"id": cid, "owner": owner, "title": "New chat", "titled": False, "created": time.time(), "updated": time.time(),
+             "messages": []}
         self.chats[cid] = c
         return c
 
-    def rename(self, chat_id, title):
+    def rename(self, owner, chat_id, title):
         title = " ".join(str(title).split())[:60]
         with self.lock:
-            c = self.chats.get(chat_id)
+            c = self._mine(owner, chat_id)
             if c and title:
                 c["title"], c["titled"] = title, True
                 self._save(c)
                 return True
         return False
 
-    def delete(self, chat_id):
+    def delete(self, owner, chat_id):
         with self.lock:
-            if chat_id not in self.chats or (self.busy and self.busy_chat == chat_id):
+            if not self._mine(owner, chat_id) or (self.busy and self.busy_chat == chat_id):
                 return False
             del self.chats[chat_id]
         try:
-            os.remove(os.path.join(self.folder, chat_id + ".json"))
+            os.remove(os.path.join(self.folder, owner, os.path.basename(chat_id) + ".json"))
         except OSError:
             pass
         return True
 
-    def send(self, text, chat_id=None, compare=True, suggest=True, fix=True):
+    def send(self, owner, text, chat_id=None, compare=True, suggest=True, fix=True):
         """Returns the chat's id (a new chat if chat_id is empty), or None if it's still busy.
         compare: sometimes write a second answer to choose from. suggest: suggest follow-up questions afterwards.
         fix: fix the spelling first (not needed for a suggestion you tapped: the AI wrote it, so it's spelled right)."""
@@ -425,7 +510,9 @@ class Chat:
         with self.lock:
             if self.busy:
                 return None
-            c = self.chats.get(chat_id) or self._new()
+            if owner not in self.keys:
+                raise ValueError("Please sign in again.")
+            c = self._mine(owner, chat_id) or self._new(owner)
             msg = {"you": text, "fixed": None if fix else text, "answers": [], "error": None, "time": time.time()}
             c["messages"].append(msg)
             c["updated"] = time.time()
@@ -436,14 +523,16 @@ class Chat:
         threading.Thread(target=self._work, args=(c, msg, False, compare, suggest), daemon=True).start()
         return c["id"]
 
-    def stop(self):
-        """The ⏹️ button: stop writing the answer."""
-        self.stop_asked = True
+    def stop(self, owner):
+        """The ⏹️ button: stop writing the answer (only your own)."""
+        with self.lock:
+            if self.busy and self.chats.get(self.busy_chat, {}).get("owner") == owner:
+                self.stop_asked = True
 
-    def regenerate(self, chat_id):
+    def regenerate(self, owner, chat_id):
         """The 🔄 button: answer your last message again, a bit differently."""
         with self.lock:
-            c = self.chats.get(chat_id)
+            c = self._mine(owner, chat_id)
             if self.busy or not c or not c["messages"]:
                 return None
             msg = c["messages"][-1]
@@ -453,10 +542,10 @@ class Chat:
         threading.Thread(target=self._work, args=(c, msg, True, False, True), daemon=True).start()
         return c["id"]
 
-    def pick(self, chat_id, msg_time, index, which):
+    def pick(self, owner, chat_id, msg_time, index, which):
         """You chose the answer you like better (which = "a" or "b"). The one you chose becomes the answer."""
         with self.lock:
-            c = self.chats.get(chat_id)
+            c = self._mine(owner, chat_id)
             m = next((m for m in (c["messages"] if c else []) if abs(m.get("time", 0) - float(msg_time)) < 1e-3), None)
             if not m or not 0 <= index < len(m["answers"]) or which not in ("a", "b"):
                 return False
@@ -470,10 +559,12 @@ class Chat:
             self._save(c)
             return True
 
-    def picks(self):
+    def picks(self, owner):
         """How often you chose the careful answer or the creative one (a tiny experiment of your own)."""
         out = {"careful": 0, "creative": 0}
         for c in self.chats.values():
+            if c.get("owner") != owner:
+                continue
             for m in c["messages"]:
                 for e in m.get("answers", []):
                     if e.get("pick") and e.get("temps"):
@@ -494,7 +585,7 @@ class Chat:
         need = 1 if REMEMBER_CUES.search(q) else 2
         found = []
         with self.lock:
-            others = [c for c in self.chats.values() if c["id"] != chat["id"]]
+            others = [c for c in self.chats.values() if c["id"] != chat["id"] and c.get("owner") == chat.get("owner")]
             for c in others:
                 for m in c["messages"]:
                     for a in m.get("answers", []):
@@ -580,7 +671,8 @@ class Chat:
                 guess = None if found else guess_kind(q)          # would one confident answer just be a guess?
                 guess_note = {"why": WHY_NOTE, "opinion": OPINION_NOTE}.get(guess, "")
                 wants_next = suggest and q is questions[-1]          # follow-ups come with the last answer
-                system = ANSWER_SYSTEM + math_note + guess_note + (FOLLOWUPS if wants_next else "")
+                system = (ANSWER_SYSTEM + self.notes.get(chat.get("owner"), "") + math_note + guess_note
+                          + (FOLLOWUPS if wants_next else ""))
                 if examples:
                     system += "\nHere are similar problems that were solved and checked:\n" + "\n".join(
                         "PROBLEM: %s MATH: %s ANSWER: %s" % (e["problem"], e["math"], e["answer"]) for e in examples)
@@ -681,6 +773,8 @@ class Chat:
                 self.stage = None
                 if chat["id"] in self.chats:
                     self._save(chat)
+                if chat.get("owner") in self.leaving:          # they signed out while it was writing: lock it all now
+                    self._unload(chat["owner"])
             self.bot.hold_until = time.time() + 20             # carry on practicing soon, unless you ask again
 
     def _second(self, entry, convo):

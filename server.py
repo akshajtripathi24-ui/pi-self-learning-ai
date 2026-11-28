@@ -23,6 +23,7 @@ import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
+import accounts
 import advmath
 import collapse
 import selfmath
@@ -35,6 +36,17 @@ DATA = os.path.join(HERE, "data")
 RUNS = os.path.join(DATA, "collapse")
 SETTINGS_FILE = os.path.join(HERE, "config.json")
 DEFAULTS = {"math_paused": False, "math_course": "auto", "chatbot_running": False, "model": "qwen2.5:0.5b", "ollama_url": "http://localhost:11434", "llamacpp_url": "http://localhost:8099"}
+
+
+AVATAR_PROMPT = """Pick one emoji and two background colors for a profile picture of: {description}
+Reply with only this, like the example.
+Example for "a happy cat that loves space": EMOJI: 🐱 COLORS: #1e3a8a #f472b6
+Your answer for "{description}":"""
+AVATAR_WORDS = [(("robot", "bot", "android"), "🤖"), (("astronaut", "space", "rocket"), "🚀"), (("cat", "kitten"), "🐱"),
+                (("dog", "puppy"), "🐶"), (("planet", "saturn", "mars"), "🪐"), (("alien", "ufo"), "👽"), (("star",), "⭐"),
+                (("fire", "flame"), "🔥"), (("game", "gaming"), "🎮"), (("code", "coding", "computer"), "💻"),
+                (("dragon",), "🐉"), (("car", "race"), "🏎️"), (("soccer", "football"), "⚽"), (("basketball",), "🏀"),
+                (("music", "guitar"), "🎸"), (("book", "read"), "📚"), (("ninja",), "🥷"), (("lion",), "🦁"), (("owl",), "🦉")]
 
 
 def load_settings():
@@ -90,6 +102,13 @@ class Lab:
         self.bot = Chatbot(DATA, cfg)
         self.bot.running = cfg["chatbot_running"]           # keep practicing after the Pi restarts
         self.chat = Chat(self.bot, os.path.join(DATA, "chats"), tutor=self.math_ai_try)   # part 4: talk to the AI
+        try:                                                                                 # part 5: accounts
+            self.accounts = accounts.Accounts(os.path.join(DATA, "accounts"), cfg, on_login=self.chat.load_user,
+                                              on_logout=self.chat.unload_user, on_delete=self.chat.delete_user)
+            self.accounts_error = None
+        except RuntimeError as e:
+            self.accounts, self.accounts_error = None, str(e)
+            print(e, flush=True)
         self.collapse_proc = None
         self.collapse_path = None
         for path in glob.glob(os.path.join(RUNS, "*.json")):          # runs that were cut off by a restart
@@ -139,8 +158,34 @@ class Lab:
     def levels_of(self, course):
         return selfmath.LEVELS if course is self.math else course.levels
 
+    def ai_avatar(self, description):
+        """Profile pictures "made by the AI": it picks an emoji and two colors that match your description.
+        (A small language model can't draw, but it can choose!)"""
+        description = " ".join(str(description or "").split())[:80]
+        if not description:
+            raise accounts.AuthError("Describe the picture you want first, like: a robot astronaut.")
+        self.bot.hold_until = time.time() + 60                    # the practice gets out of the way
+        reply = ""
+        try:
+            reply = self.bot.llm.ask(AVATAR_PROMPT.format(description=description), max_tokens=24, temperature=0.8)
+        except Exception as e:
+            print("avatar error:", e, flush=True)
+        emoji = re.search(r"EMOJI:\s*(\S{1,8})", reply)
+        colors = re.findall(r"#[0-9a-fA-F]{6}", reply)
+        emoji = emoji.group(1) if emoji and not re.search(r"[A-Za-z0-9]", emoji.group(1)) else None
+        if not emoji:                                             # the AI didn't follow the format: pick by keyword
+            low = description.lower()
+            emoji = next((e for words, e in AVATAR_WORDS if any(w in low for w in words)), "🤖")
+        while len(colors) < 2:
+            colors.append(["#22d3ee", "#6366f1", "#f472b6", "#facc15", "#34d399"][len(colors) + len(description) % 3])
+        return {"kind": "emoji", "emoji": emoji, "c1": colors[0], "c2": colors[1]}
+
     def save_settings(self):
         write_json(SETTINGS_FILE, self.cfg)
+        try:
+            os.chmod(SETTINGS_FILE, 0o600)              # it can hold the email app password: only you can read it
+        except OSError:
+            pass
 
     # ------------------------------------------------------------ part 1
     def training(self):
@@ -265,14 +310,32 @@ class Handler(BaseHTTPRequestHandler):
     def log_message(self, *a):
         pass
 
-    def _send(self, code, body, ctype="application/json"):
+    def _send(self, code, body, ctype="application/json", cookie=None):
         data = body if isinstance(body, bytes) else json.dumps(body, separators=(",", ":")).encode()
         self.send_response(code)
         self.send_header("Content-Type", ctype)
         self.send_header("Cache-Control", "no-store")
+        if cookie is not None:              # the sign-in cookie: hidden from the page's code (HttpOnly), never sent to other sites
+            self.send_header("Set-Cookie", "sid=%s; HttpOnly; SameSite=Strict; Path=/; Max-Age=%d"
+                             % (cookie, accounts.SESSION_DAYS * 86400 if cookie else 0))
         self.send_header("Content-Length", str(len(data)))
         self.end_headers()
         self.wfile.write(data)
+
+    def _sid(self):
+        for part in (self.headers.get("Cookie") or "").split(";"):
+            k, _, v = part.strip().partition("=")
+            if k == "sid":
+                return v
+        return None
+
+    def _who(self):
+        """The signed-in account, or None."""
+        lab = self.lab
+        return lab.accounts.session(self._sid()) if lab.accounts else None
+
+    def _need_login(self):
+        return self._send(401, {"error": "Please sign in first.", "login": True})
 
     def do_GET(self):
         path = urlparse(self.path).path
@@ -288,20 +351,86 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(200, lab.collapse_status())
             if path == "/api/chatbot":
                 return self._send(200, lab.chatbot_status())
+            if path == "/api/me":
+                if not lab.accounts:
+                    return self._send(200, {"signed_in": False, "error": lab.accounts_error})
+                s = self._who()
+                return self._send(200, dict(lab.accounts.me(s), signed_in=True) if s else
+                                  {"signed_in": False, "email_ready": lab.accounts.send.email_ready()})
             if path == "/api/chat":
+                s = self._who()
+                if not s:
+                    return self._need_login()
                 cid = parse_qs(urlparse(self.path).query).get("id", [""])[0]
-                return self._send(200, lab.chat.status(cid or None))
+                return self._send(200, lab.chat.status(s["aid"], cid or None))
             return self._send(404, {"error": "not found"})
         except Exception as e:
             print("error on", path, e, flush=True)
             return self._send(500, {"error": str(e)})
+
+    def _account_post(self, path, body):
+        """Signing in and out, and Settings. Errors a person caused (a wrong code...) come back as 400 with a message."""
+        lab, A = self.lab, self.lab.accounts
+        if not A:
+            return self._send(503, {"error": lab.accounts_error})
+        try:
+            if path == "/api/auth/email":                          # layer 1: send a code to your email
+                return self._send(200, A.start_email(body.get("email")))
+            if path == "/api/auth/email/verify":                   # ...type it in: see your accounts
+                return self._send(200, A.verify_email(body.get("token"), body.get("code")))
+            if path in ("/api/auth/signup", "/api/auth/login", "/api/auth/2fa"):
+                if path == "/api/auth/signup":
+                    r = A.signup(body.get("token"), body.get("username"), body.get("password"))
+                elif path == "/api/auth/login":                    # layer 2: the account's password
+                    r = A.login(body.get("token"), str(body.get("account", "")), body.get("password"))
+                else:                                              # layer 3 (if it's on): two-step verification
+                    r = A.verify_2fa(body.get("token"), body.get("code"))
+                if "session" in r:
+                    return self._send(200, {"signed_in": True, "username": r["username"]}, cookie=r["session"])
+                return self._send(200, r)
+            if path == "/api/auth/logout":
+                A.logout(self._sid())
+                return self._send(200, {"signed_in": False}, cookie="")
+            s = self._who()
+            if not s:
+                return self._need_login()
+            if path == "/api/me/update":
+                me = A.update(s, body)
+                lab.chat.set_profile(s["aid"], A.profile(s))      # the AI now knows what you told it
+                return self._send(200, me)
+            if path == "/api/me/avatar/ai":
+                return self._send(200, lab.ai_avatar(body.get("description")))
+            if path == "/api/me/password":
+                return self._send(200, A.change_password(s, body.get("old"), body.get("new")))
+            if path == "/api/me/email":
+                return self._send(200, A.start_email_change(s, body.get("email")))
+            if path == "/api/me/email/verify":
+                return self._send(200, A.finish_email_change(s, body.get("token"), body.get("code")))
+            if path == "/api/me/2fa":
+                return self._send(200, A.start_2fa(s, body.get("method")))
+            if path == "/api/me/2fa/phone":
+                return self._send(200, A.send_phone_test(s, body.get("token")))
+            if path == "/api/me/2fa/verify":
+                return self._send(200, A.finish_2fa(s, body.get("token"), body.get("code")))
+            if path == "/api/me/2fa/off":
+                return self._send(200, A.turn_off_2fa(s, body.get("password")))
+            if path == "/api/me/delete":
+                A.delete(s, body.get("password"))
+                return self._send(200, {"signed_in": False}, cookie="")
+            return self._send(404, {"error": "not found"})
+        except accounts.AuthError as e:
+            return self._send(400, {"error": str(e)})
 
     def do_POST(self):
         path = urlparse(self.path).path
         lab = self.lab
         try:
             n = int(self.headers.get("Content-Length") or 0)
+            if n > 300000:                                   # (a profile picture is about 60 KB; nothing needs more)
+                return self._send(413, {"error": "That's too big to send."})
             body = json.loads(self.rfile.read(n) or b"{}") if n else {}
+            if not isinstance(body, dict):
+                body = {}
             if path in ("/api/math/pause", "/api/math/resume"):
                 lab.cfg["math_paused"] = path.endswith("pause")
                 for c in lab.all_courses:
@@ -342,36 +471,43 @@ class Handler(BaseHTTPRequestHandler):
                 if lab.bot.running:
                     lab.bot.connection = lab.bot.llm.check()
                 return self._send(200, lab.chatbot_status())
+            if path.startswith("/api/auth/") or path.startswith("/api/me/"):
+                return self._account_post(path, body)
+            if path.startswith("/api/chat/"):
+                s = self._who()
+                if not s:
+                    return self._need_login()
+                me = s["aid"]
             if path == "/api/chat/send":
                 try:
-                    cid = lab.chat.send(body.get("text", ""), body.get("chat") or None,
+                    cid = lab.chat.send(me, body.get("text", ""), body.get("chat") or None,
                                         compare=body.get("compare", True) is not False, suggest=body.get("suggest", True) is not False,
                                         fix=body.get("fix", True) is not False)
                 except ValueError as e:
                     return self._send(400, {"error": str(e)})
                 if not cid:
                     return self._send(409, {"error": "It's still answering your last message."})
-                return self._send(200, lab.chat.status(cid))
+                return self._send(200, lab.chat.status(me, cid))
             if path == "/api/chat/stop":
-                lab.chat.stop()
+                lab.chat.stop(me)
                 return self._send(200, {"ok": True})
             if path == "/api/chat/regenerate":
-                cid = lab.chat.regenerate(str(body.get("chat", "")))
+                cid = lab.chat.regenerate(me, str(body.get("chat", "")))
                 if not cid:
                     return self._send(409, {"error": "Wait until it finishes answering."})
-                return self._send(200, lab.chat.status(cid))
+                return self._send(200, lab.chat.status(me, cid))
             if path == "/api/chat/pick":
                 try:
-                    ok = lab.chat.pick(str(body.get("chat", "")), float(body.get("time", 0)), int(body.get("index", -1)), str(body.get("which", "")))
+                    ok = lab.chat.pick(me, str(body.get("chat", "")), float(body.get("time", 0)), int(body.get("index", -1)), str(body.get("which", "")))
                 except (TypeError, ValueError):
                     ok = False
                 if not ok:
                     return self._send(409, {"error": "That answer can't be picked (it may still be writing, or you already picked one)."})
-                return self._send(200, lab.chat.status(str(body.get("chat", ""))))
+                return self._send(200, lab.chat.status(me, str(body.get("chat", ""))))
             if path == "/api/chat/rename":
-                return self._send(200, {"ok": lab.chat.rename(str(body.get("chat", "")), body.get("title", ""))})
+                return self._send(200, {"ok": lab.chat.rename(me, str(body.get("chat", "")), body.get("title", ""))})
             if path == "/api/chat/delete":
-                if not lab.chat.delete(str(body.get("chat", ""))):
+                if not lab.chat.delete(me, str(body.get("chat", ""))):
                     return self._send(409, {"error": "Wait until it finishes answering in that chat."})
                 return self._send(200, {"ok": True})
             if path == "/api/chatbot/experiment":

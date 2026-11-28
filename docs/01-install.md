@@ -4,7 +4,7 @@ Run every command on the Pi, one line at a time.
 
 ```bash
 sudo apt update
-sudo apt install -y git python3-numpy
+sudo apt install -y git python3-numpy python3-cryptography
 git clone https://github.com/akshajtripathi24-ui/pi-self-learning-ai ~/selflearning
 cd ~/selflearning
 bash setup-autostart.sh
@@ -12,7 +12,7 @@ bash setup-autostart.sh
 
 | Command | What it does |
 |---|---|
-| `sudo apt install -y git python3-numpy` | Installs git and **numpy**, the Python package for fast math with big lists of numbers (the AI's brain is about 100,000 numbers) |
+| `sudo apt install -y git python3-numpy python3-cryptography` | Installs git, **numpy** (the Python package for fast math with big lists of numbers: the AI's brain is about 100,000 numbers) and **cryptography** (locks accounts and chats) |
 | `git clone … ~/selflearning` | Downloads this project into a folder called `selflearning` |
 | `bash setup-autostart.sh` | Starts it in the background and makes it start whenever the Pi boots |
 

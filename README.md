@@ -6,7 +6,8 @@ Three ways an AI can **teach itself**, all running on a Raspberry Pi:
 |---|---|---|
 | 🧮 | **The self-taught math AI** | A tiny GPT (the same kind of AI as ChatGPT, a million times smaller) starts knowing nothing. It writes its own quiz questions, mostly about what it's worst at, answers them, and a checker marks every answer. **Course 1:** adding and subtracting up to 999. **Course 2:** multiplying, algebra (solve for x) and calculus (derivatives), with a second, bigger brain. **Course 3:** decimals, quadratic equations, integrals and longer derivatives, with a third brain. All by itself. |
 | 💬 | **The self-quizzing chatbot** | A small ready-made AI language model writes its own math problems (arithmetic, decimals, algebra and calculus), a math engine checks them, then it answers them. Wrong answers go into a notebook, and experiments test whether reading the notebook helps. |
-| 🗨️ | **Chat with it** | Saved chats with AI-written titles, like other chatbots, and it remembers related things from your other chats. Type any question, even with spelling mistakes. It fixes your message, answers each question, and a math engine works out any arithmetic, decimals, percentages, algebra or calculus exactly. If the AI wrongly says "I can't help with that", it tries again with simpler instructions. Your trained math AI has a go too, and the chatbot's checked practice problems help with word problems. |
+| 🗨️ | **Chat with it** | Saved chats with AI-written titles, like other chatbots, and it remembers related things from your other chats. Type any question, even with spelling mistakes. It fixes your message, answers each question, and a math engine works out any arithmetic, decimals, percentages, algebra or calculus exactly. If the AI wrongly says "I can't help with that", it tries again with simpler instructions. Your trained math AI has a go too, and the chatbot's checked practice problems help with word problems. It suggests follow-up questions, sometimes shows two answers to pick from, and gives possible reasons instead of guessing. |
+| 🔐 | **Accounts and Settings** | Sign in with a code sent to your email (it never asks for your email password), then pick your account and type its password, with optional two-step verification. Each account has its own private chats, a profile picture (upload one, pick an emoji, or let the AI make one) and a "what I use the AI for" description the AI reads before answering. Passwords are hashed with scrypt, and profiles and chats are locked with AES-GCM encryption. |
 | 🔬 | **The model-collapse experiment** | What happens when an AI learns only from its own writing? Round after round, its sentences get stranger and more repetitive, unless you keep real writing in the mix. |
 
 The big idea: **an AI can only teach itself if something checks its work.** Parts 1 and 2 have a checker. Part 3 shows what happens without one.
@@ -35,6 +36,7 @@ The big idea: **an AI can only teach itself if something checks its work.** Part
 | 5 | [Troubleshooting](docs/05-troubleshooting.md) | Problems and fixes |
 | 6 | [Build log](docs/06-build-log.md) | The real problems we hit while building it |
 | 7 | [Chat with it](docs/07-chat.md) | How the Chat tab fixes spelling, splits questions and checks math |
+| 8 | [Accounts and Settings](docs/08-accounts.md) | Signing in, setting up email codes, two-step verification, and how your data is kept private |
 
 ## Quick install
 ```bash
@@ -59,6 +61,7 @@ It uses port **8100**, so it runs next to the [Pi Stock Tracker](https://github.
 | `mathengine.py` | A small, exact math engine: decimals, percentages, square roots, solving equations, derivatives and integrals, without ever running text as code |
 | `chatbot.py` | Part 2: the teacher, checker, student and notebook, talking to Ollama or llama.cpp |
 | `chat.py` | The Chat tab: fixing spelling and grammar, splitting questions, checking math, answering |
+| `accounts.py` | Accounts: email codes, passwords (scrypt), two-step verification, and encryption (AES-GCM) |
 | `collapse.py` | Part 3: the model-collapse experiment |
 | `facts.txt` | 100 true space and robot facts, the starting sentences for part 3 |
 | `server.py` | Runs everything and serves the website |
