@@ -379,3 +379,52 @@ On a real Pi, one practice request takes 15 to 60 seconds, so the difference the
 - **"The AI makes it", honestly:** a 0.5B language model can't draw. But it can *choose*: it's asked for an emoji and two colors that match your description, like "a robot astronaut" → 🤖 on blue and pink. If it doesn't follow the format, the Pi picks an emoji by keyword (robot → 🤖, cat → 🐱, rocket → 🚀).
 
 **Tested:** the AI's instructions really include what you wrote (checked with a pretend model that records what it's told), and a click-through in a browser: saving "what I use the AI for", making a picture with the AI, and seeing it in the top bar.
+
+### 46. A robot control panel: the new look
+**Goal:** make the website look futuristic, like the screen of a robot.
+**What changed:**
+- **A blueprint grid background** with soft cyan and violet glows, and faint scanlines like an old monitor.
+- **Panels look like a HUD** (a heads-up display) with glowing corner brackets and headings like `▮ PROGRESS ────`.
+- **The top bar:**
+  - a robot-head logo (an SVG drawing) whose eyes blink and whose antenna light pulses;
+  - a green "online" light with a live clock;
+  - the tabs as numbered modules: 01 MATH AI, 02 CHATBOT, and so on.
+- **Fonts:** Orbitron, a futuristic font, for headings and numbers, and JetBrains Mono, a code font, for labels and readouts. Without internet, the page falls back to normal fonts, so it still works offline.
+- **The chat:**
+  - the AI's messages are marked `◉ PI·AI`, with a glowing edge like a terminal, and yours are violet, marked `YOU ◉`;
+  - the typing cursor is a glowing block.
+- **A start-up screen** types "ALL SYSTEMS ONLINE" for about a second. It only shows once per visit, you can click to skip it, and it's turned off (along with every animation) if your device is set to reduce motion.
+
+**Problems found while testing:**
+- **On a phone, the top bar covered a big chunk of the screen.** It stays at the top while you scroll, which is great on a computer, but on a phone the tabs wrap onto two rows. Now it only sticks on bigger screens.
+- **The Chat tab still said "every chat is saved on the Pi"**, which isn't true for guests. Fixed.
+
+**Tested:** screenshots of every tab at computer and phone sizes (nothing scrolls sideways), and all the earlier tests again: 28 account steps, 14 chat checks and 30 math questions, all passed.
+
+### 47. Guest mode: use the AI without saving anything
+**Goal:** let someone use the AI without an account, and forget everything when they close the website.
+**How:**
+- A guest gets a made-up account that only exists in the Pi's memory. Its chats are never written to storage (the code that saves chats skips guests).
+- When the page closes, it sends the Pi a last message ("I'm leaving", using `sendBeacon`, which still works while a page is closing), and the Pi deletes the guest's chats straight away.
+- If that message never arrives, a cleanup that runs every minute deletes guests who haven't been active for 30 minutes.
+- The guest's cookie has no expiry date, so the browser itself forgets it when it closes.
+
+**Tested:** 6 tests:
+- a guest can chat;
+- nothing about the guest is written to storage;
+- leaving deletes the chats from memory;
+- the cleanup wipes a guest who left without saying goodbye;
+- an active guest isn't wiped;
+- guests can't change settings.
+
+Plus, in a real browser: we closed the page and checked the Pi had really signed the guest out.
+
+### 48. A new kind of practice: spelling fixes
+**Goal:** another way for the Chatbot to train, one that helps the Chat tab.
+**How:** the AI writes a question, **Python adds typos on purpose**, and the AI has to fix them. Because Python made the typos, it knows the exact right answer, so the checking can't be wrong (unlike word problems, where the teacher's math can be wrong). It uses exactly the same instructions as the Chat tab's spelling fixer, so it really is practicing that job. Its correct examples (always right, for the same reason) are now shown to the Chat tab's fixer too, for messages about similar things.
+**Problems handled:**
+- Typos are never added to names (words with a capital letter in the middle of a sentence), because the Chat tab's safety check protects names.
+- Questions with symbols (like "2+2") are thrown away, because typos in math wouldn't be fair.
+- The word-problem examples in the Chat tab now skip the spelling pages, so they don't get mixed up.
+
+**Tested:** typos on 3 questions, the checker on 4 answers (right, right without capitals, a changed word, and an answer instead of a fix), 4 teacher replies (2 good, 2 thrown away), and 12 practice rounds with a pretend model, including the notebook examples and the Chat tab picking up the practice's examples.

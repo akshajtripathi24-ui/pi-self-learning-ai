@@ -42,6 +42,7 @@ CODE_MINUTES = 10                  # a code works for 10 minutes...
 CODE_TRIES = 5                     # ...and for 5 tries
 LOCK_AFTER, LOCK_MINUTES = 5, 5    # 5 wrong passwords in a row lock the account for 5 minutes
 SESSION_DAYS = 7
+GUEST_MINUTES = 30                 # a guest who closes the page without saying goodbye is wiped after 30 quiet minutes
 USE_OPTIONS = ["School homework", "Math practice", "Robotics & building", "Coding", "Space & science",
                "Making videos", "Writing & ideas", "Just for fun"]
 COMMON_PASSWORDS = {"password", "password1", "12345678", "123456789", "1234567890", "qwertyuiop", "qwerty123",
@@ -382,9 +383,33 @@ class Accounts:
             self.on_login(aid, data_key, self.profile(self.sessions[sid]), first_ever)
         return {"session": sid, "username": username}
 
+    # ------------------------------------------------------------ guests: use the AI without an account
+    def guest(self):
+        """A guest pass: a made-up account that only exists in memory. Its chats are never saved to the Pi's storage,
+        and they're deleted when the guest leaves (closes the page), or after 30 quiet minutes."""
+        sid, aid = secrets.token_urlsafe(32), "guest-" + secrets.token_hex(6)
+        key = os.urandom(32)
+        with self.lock:
+            self.sessions[sid] = {"aid": aid, "key": key, "username": "Guest", "email": None, "guest": True,
+                                  "expires": time.time() + GUEST_MINUTES * 60}
+        if self.on_login:
+            self.on_login(aid, key, {}, False)
+        return {"session": sid, "username": "Guest", "guest": True}
+
+    def cleanup(self):
+        """Every minute: forget old codes, and end sign-ins (and guest passes) that ran out."""
+        with self.lock:
+            self._tidy()
+            ended = self._expire()
+        for aid in ended:
+            if self.on_logout:
+                self.on_logout(aid)
+
     def session(self, sid):
         with self.lock:
             s = self.sessions.get(str(sid or ""))
+            if s and s.get("guest") and s["expires"] > time.time():
+                s["expires"] = time.time() + GUEST_MINUTES * 60        # still here: keep the guest pass going
             ended = self._expire() if s and s["expires"] <= time.time() else []
         for aid in ended:                                   # ran out: lock their chats again, like logging out
             if self.on_logout:
@@ -409,6 +434,9 @@ class Accounts:
         self._save()
 
     def me(self, s):
+        if s.get("guest"):
+            return {"username": "Guest", "email": None, "name": "Guest", "avatar": None, "uses": [], "about": "", "twofa": "off",
+                    "use_options": USE_OPTIONS, "email_ready": self.send.email_ready(), "guest": True}
         p = self.profile(s)
         twofa = p["twofa"]["method"]
         return {"username": s["username"], "email": p["email"], "name": p["name"], "avatar": p["avatar"], "uses": p["uses"],

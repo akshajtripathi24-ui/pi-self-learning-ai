@@ -17,6 +17,15 @@ sudo systemctl restart selflearning
 
 Without it, everything else still works, but signing in shows a message telling you to install it.
 
+## 👻 Guest mode: no account, nothing saved
+On the sign-in screen, press **👻 Use as a guest** to chat without an account.
+- Your chats are **never written to the Pi's storage**. They only live in its memory.
+- **When you close the website, they're deleted straight away:** the page tells the Pi as it closes.
+- If that message doesn't get through (like if your Wi-Fi drops), they're deleted after **30 minutes** without you using it.
+- The guest's sign-in cookie has no expiry date, so the browser forgets it as soon as it closes.
+- Even refreshing the page starts a fresh guest pass.
+- Guests can't use Settings (there's nothing to save), and they don't get memory from other chats, except other chats in the same visit.
+
 ## Signing in: 2 layers
 1. **Your email.** Type your email, and the Pi sends you a **6-digit code**. Typing the code proves the email is yours.
    - **The website never asks for your email's password.** That's on purpose: a website that asks for your email password is almost always a scam ("phishing"). Real websites send you a code instead.

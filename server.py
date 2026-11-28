@@ -310,14 +310,15 @@ class Handler(BaseHTTPRequestHandler):
     def log_message(self, *a):
         pass
 
-    def _send(self, code, body, ctype="application/json", cookie=None):
+    def _send(self, code, body, ctype="application/json", cookie=None, keep=True):
         data = body if isinstance(body, bytes) else json.dumps(body, separators=(",", ":")).encode()
         self.send_response(code)
         self.send_header("Content-Type", ctype)
         self.send_header("Cache-Control", "no-store")
         if cookie is not None:              # the sign-in cookie: hidden from the page's code (HttpOnly), never sent to other sites
-            self.send_header("Set-Cookie", "sid=%s; HttpOnly; SameSite=Strict; Path=/; Max-Age=%d"
-                             % (cookie, accounts.SESSION_DAYS * 86400 if cookie else 0))
+            self.send_header("Set-Cookie", "sid=%s; HttpOnly; SameSite=Strict; Path=/%s"
+                             % (cookie, "; Max-Age=%d" % (accounts.SESSION_DAYS * 86400 if cookie else 0) if keep or not cookie else ""))
+            # (a guest's cookie has no Max-Age, so the browser forgets it as soon as it closes)
         self.send_header("Content-Length", str(len(data)))
         self.end_headers()
         self.wfile.write(data)
@@ -388,12 +389,17 @@ class Handler(BaseHTTPRequestHandler):
                 if "session" in r:
                     return self._send(200, {"signed_in": True, "username": r["username"]}, cookie=r["session"])
                 return self._send(200, r)
+            if path == "/api/auth/guest":                          # no account: nothing is saved
+                r = A.guest()
+                return self._send(200, {"signed_in": True, "guest": True}, cookie=r["session"], keep=False)
             if path == "/api/auth/logout":
                 A.logout(self._sid())
                 return self._send(200, {"signed_in": False}, cookie="")
             s = self._who()
             if not s:
                 return self._need_login()
+            if s.get("guest"):
+                raise accounts.AuthError("Guests don't have settings. Create an account to keep your chats and settings.")
             if path == "/api/me/update":
                 me = A.update(s, body)
                 lab.chat.set_profile(s["aid"], A.profile(s))      # the AI now knows what you told it
@@ -553,6 +559,16 @@ def main():
     signal.signal(signal.SIGTERM, stop)
     signal.signal(signal.SIGINT, stop)
     threading.Thread(target=lab.math_loop, daemon=True).start()
+
+    def tidy_accounts():                                  # ends sign-ins and guest passes that ran out
+        while True:
+            time.sleep(60)
+            try:
+                if lab.accounts:
+                    lab.accounts.cleanup()
+            except Exception as e:
+                print("cleanup error:", e, flush=True)
+    threading.Thread(target=tidy_accounts, daemon=True).start()
     threading.Thread(target=lab.bot.run, daemon=True).start()
     server = ThreadingHTTPServer(("0.0.0.0", PORT), Handler)
     print(time.strftime("%Y-%m-%d %H:%M:%S"), "Pi Self-Learning AI running on port", PORT, flush=True)

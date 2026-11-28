@@ -84,7 +84,81 @@ Now write a new one about {topic}.
 PROBLEM: <the word problem>
 MATH: <the math>"""
 
-KINDS = ("arithmetic", "decimals", "algebra", "calculus")       # the kinds of question the teacher can write
+# ---------------------------------------------------------------- spelling practice (it trains the Chat tab's spelling fixer)
+SPELL_TEACHER = """Write one short question a curious student might type to a chatbot about {topic}.
+Use 6 to 14 words and end it with a question mark. Reply with only the question."""
+
+# the SAME instructions the Chat tab uses to fix your messages, so practicing this really practices that
+FIX_PROMPT = """{examples}Fix the spelling and grammar mistakes in the text. Keep the same meaning and the same questions.
+Don't answer the questions. Reply with only the fixed text.
+
+Text: wat is the bigest planet in are solar sistem
+Fixed: What is the biggest planet in our solar system?
+
+Text: how do rokets get to space and how fast do they go
+Fixed: How do rockets get to space, and how fast do they go?
+
+Text: {text}
+Fixed:"""
+
+NEAR_KEYS = {}                                   # the keys next to each key, for "fat finger" typos
+for _row in ("qwertyuiop", "asdfghjkl", "zxcvbnm"):
+    for _i, _k in enumerate(_row):
+        NEAR_KEYS[_k] = _row[max(0, _i - 1):_i] + _row[_i + 1:_i + 2]
+
+
+def typo(word, r):
+    """One typo, the kinds people really make: swapped letters, a missing letter, a doubled letter, or the key next door.
+    The first letter stays, and so does anything after the word (like "?")."""
+    m = re.match(r"([A-Za-z']+)(.*)$", word)
+    letters, tail = list(m.group(1)), m.group(2)
+    for _ in range(10):
+        out, i = letters[:], r.randrange(1, len(letters) - 1)
+        how = r.choice(("swap", "drop", "double", "near"))
+        if how == "swap":
+            out[i], out[i + 1] = out[i + 1], out[i]
+        elif how == "drop":
+            del out[i]
+        elif how == "double":
+            out.insert(i, out[i])
+        elif out[i].lower() in NEAR_KEYS:
+            out[i] = r.choice(NEAR_KEYS[out[i].lower()])
+        if out != letters:
+            return "".join(out) + tail
+    return word
+
+
+def add_typos(question, r):
+    """Python messes up a correct question on purpose, so it knows exactly what the fixed version should be.
+    Names (words with a capital letter in the middle of the sentence) are left alone, like in the Chat tab."""
+    words = question.split(" ")
+    can = [i for i, w in enumerate(words) if len(re.sub(r"[^A-Za-z]", "", w)) >= 4 and re.match(r"[A-Za-z']+\W*$", w)
+           and (i == 0 or not w[0].isupper())]
+    if not can:
+        raise ValueError("no words long enough to add typos to")
+    r.shuffle(can)
+    for i in can[:max(2, len(can) // 3)]:
+        words[i] = typo(words[i], r)
+    out = " ".join(words)
+    if r.random() < 0.7:
+        out = out[0].lower() + out[1:]                # people often skip the capital letter...
+    if r.random() < 0.6:
+        out = out.rstrip("?")                         # ...and the question mark
+    return out
+
+
+def fixed_text(reply):
+    """The fix the AI wrote: its first line, without "Fixed:" or quotes (the same cleanup the Chat tab does)."""
+    line = (reply or "").strip().split("\n")[0].strip().strip('"').strip()
+    return re.sub(r"^(fixed|text)\s*:\s*", "", line, flags=re.I)
+
+
+def same_words(a, b):
+    """Right if it has the same words in the same order (capitals and punctuation don't count)."""
+    return re.findall(r"[a-z0-9']+", a.lower()) == re.findall(r"[a-z0-9']+", b.lower())
+
+
+KINDS = ("arithmetic", "decimals", "algebra", "calculus", "spelling")    # the kinds of question the teacher can write
 
 
 OPS = {ast.Add: operator.add, ast.Sub: operator.sub, ast.Mult: operator.mul, ast.Div: operator.truediv}
@@ -183,8 +257,16 @@ def compare(with_, without):
     return {"verdict": "the notebook helped" if a / n1 > b / n2 else "the notebook made it worse", "luck": luck}
 
 
-def parse_kind(text, kind):
+def parse_kind(text, kind, r=None):
     """The checker, for every kind of question. Returns (problem, math, true answer, what the checker worked out)."""
+    if kind == "spelling":
+        q = re.sub(r"^\s*(question|q)\s*:\s*", "", (text or "").strip().split("\n")[0], flags=re.I).strip().strip('"*').strip()
+        if not q.endswith("?") or not 5 <= len(q.split()) <= 20:
+            raise ValueError("it isn't one short question")
+        if not re.fullmatch(r"[A-Za-z0-9 ,'?-]+", q):
+            raise ValueError("it has symbols in it, so the typos wouldn't be fair")
+        messy = add_typos(q, r or random.Random())
+        return messy, q, q, "Python added typos to: %s" % q
     if kind == "arithmetic":
         problem, math_text, truth = parse_teacher(text)
         return problem, math_text, truth, "%s = %s" % (math_text, truth)
@@ -239,6 +321,9 @@ def parse_kind(text, kind):
 
 def check_answer(kind, reply, truth):
     """Mark the student's answer. Derivatives are compared as math, so 2x + 6x^2 counts the same as 6x^2 + 2x."""
+    if kind == "spelling":
+        fixed = fixed_text(reply)
+        return fixed[:160] or None, bool(fixed) and same_words(fixed, truth)
     if kind == "decimals":
         answer = parse_answer(reply)
         return answer, answer is not None and abs(answer - float(truth)) < 1e-6
@@ -472,12 +557,13 @@ class Chatbot:
         kind = self.rng.choice([k for k in st["settings"].get("topics", ["arithmetic"]) if k in KINDS] or ["arithmetic"])
         t0 = time.time()
         self.stage, self.stage_since = "teacher", time.time()
-        prompt = {"arithmetic": TEACHER_PROMPT, "decimals": DECIMALS_PROMPT, "algebra": ALGEBRA_PROMPT, "calculus": CALCULUS_PROMPT}[kind]
+        prompt = {"arithmetic": TEACHER_PROMPT, "decimals": DECIMALS_PROMPT, "algebra": ALGEBRA_PROMPT, "calculus": CALCULUS_PROMPT,
+                  "spelling": SPELL_TEACHER}[kind]
         chat_waiting = lambda: time.time() < self.hold_until             # the Chat tab needs the model: hang up
         teacher = self.llm.ask(prompt.format(topic=topic), max_tokens=170, temperature=0.9, stop=chat_waiting)   # 1. teacher
         try:
-            problem, math_text, truth, worked = parse_kind(teacher, kind)                                  # 2. checker
-            if st["settings"].get("strict"):
+            problem, math_text, truth, worked = parse_kind(teacher, kind, self.rng)                         # 2. checker
+            if st["settings"].get("strict") and kind != "spelling":
                 makes_sense(problem, math_text, kind)
         except ValueError as e:
             with self.lock:
@@ -488,12 +574,18 @@ class Chatbot:
         examples = ""
         if use_notebook:
             pages = [e for e in st["notebook"] if e.get("kind", "arithmetic") == kind] or st["notebook"]
-            examples = "Here are some solved examples from your notebook:\n\n" + "\n\n".join(
-                "PROBLEM: %s\nMATH: %s\nANSWER: %s" % (e["problem"], e["math"], e["answer"])
-                for e in similar(problem, pages, st["settings"].get("pages", 3))) + "\n\n"
+            picked = similar(problem, pages, st["settings"].get("pages", 3))
+            if kind == "spelling":
+                examples = "".join("Text: %s\nFixed: %s\n\n" % (e["problem"], e["answer"]) for e in picked)
+            else:
+                examples = "Here are some solved examples from your notebook:\n\n" + "\n\n".join(
+                    "PROBLEM: %s\nMATH: %s\nANSWER: %s" % (e["problem"], e["math"], e["answer"]) for e in picked) + "\n\n"
         self.stage, self.stage_since = "student", time.time()
-        ask = CALCULUS_STUDENT if kind == "calculus" else STUDENT_PROMPT
-        reply = self.llm.ask(ask.format(examples=examples, problem=problem), max_tokens=200, temperature=0.2,
+        if kind == "spelling":
+            student = FIX_PROMPT.format(examples=examples, text=problem)
+        else:
+            student = (CALCULUS_STUDENT if kind == "calculus" else STUDENT_PROMPT).format(examples=examples, problem=problem)
+        reply = self.llm.ask(student, max_tokens=200 if kind != "spelling" else len(problem) // 2 + 40, temperature=0.2,
                              stop=chat_waiting)                                                            # 3. student
         answer, ok = check_answer(kind, reply, truth)
         with self.lock:

@@ -23,19 +23,7 @@ import shutil
 
 import mathengine
 from accounts import seal, unseal
-from chatbot import similar
-
-FIX_PROMPT = """Fix the spelling and grammar mistakes in the text. Keep the same meaning and the same questions.
-Don't answer the questions. Reply with only the fixed text.
-
-Text: wat is the bigest planet in are solar sistem
-Fixed: What is the biggest planet in our solar system?
-
-Text: how do rokets get to space and how fast do they go
-Fixed: How do rockets get to space, and how fast do they go?
-
-Text: {text}
-Fixed:"""
+from chatbot import FIX_PROMPT, similar
 
 ANSWER_SYSTEM = """You are a friendly helper for a student who loves robotics, space and coding.
 Answer the question clearly in 2 to 4 short sentences. If you're not sure about something, say so.
@@ -353,11 +341,12 @@ class Chat:
 
     # ------------------------------------------------------------ accounts: unlocking and locking their chats
     def load_user(self, owner, key, profile=None, first_ever=False):
-        """Someone signed in: unlock their chats with their key."""
+        """Someone signed in: unlock their chats with their key. (A guest has none: theirs only live in memory.)"""
         folder = os.path.join(self.folder, owner)
-        os.makedirs(folder, exist_ok=True)
         loaded = {}
-        for name in os.listdir(folder):
+        if not owner.startswith("guest-"):
+            os.makedirs(folder, exist_ok=True)
+        for name in (os.listdir(folder) if not owner.startswith("guest-") else []):
             if name.endswith(".json"):
                 try:
                     with open(os.path.join(folder, name)) as f:
@@ -437,7 +426,7 @@ class Chat:
     def _save(self, chat):
         """Locked with its owner's key, so nobody can read it without signing in (not even with the SD card)."""
         key = self.keys.get(chat.get("owner"))
-        if not key:
+        if not key or chat["owner"].startswith("guest-"):         # guests' chats are never written to the Pi's storage
             return
         folder = os.path.join(self.folder, chat["owner"])
         os.makedirs(folder, exist_ok=True)
@@ -572,9 +561,18 @@ class Chat:
         return out
 
     # ------------------------------------------------------------ what it can use to answer
+    def _fix_examples(self, text, n=2):
+        """Up to 2 typo fixes from the Chatbot's spelling practice, like this message. They're always right,
+        because Python made the typos itself, so it knows the real sentence."""
+        pages = [e for e in list(self.bot.state.get("notebook", [])) + list(self.bot.state.get("solved", []))
+                 if e.get("kind") == "spelling"]
+        words = set(re.findall(r"[a-z]{4,}", text.lower()))
+        picked = [e for e in similar(text, pages, n) if words & set(re.findall(r"[a-z]{4,}", e["problem"].lower()))]
+        return "".join("Text: %s\nFixed: %s\n\n" % (e["problem"], e["answer"]) for e in picked)
+
     def _examples(self, q, n=2):
         """Up to 2 practice problems like this one that the Chatbot got right (so Python and the AI agreed)."""
-        solved = list(self.bot.state.get("solved", []))
+        solved = [e for e in list(self.bot.state.get("solved", [])) if e.get("kind", "arithmetic") != "spelling"]
         words = set(re.findall(r"[a-z]{4,}", q.lower()))
         return [e for e in similar(q, solved, n) if len(words & set(re.findall(r"[a-z]{4,}", e["problem"].lower()))) >= 2]
 
@@ -633,7 +631,8 @@ class Chat:
                 fixed = msg["you"]                             # nothing misspelled: skip the fixing step (saves 5-8 s)
             else:
                 self._set("fixing")
-                fixed = llm.ask(FIX_PROMPT.format(text=msg["you"]), max_tokens=len(msg["you"]) // 2 + 40, temperature=0)
+                fixed = llm.ask(FIX_PROMPT.format(examples=self._fix_examples(msg["you"]), text=msg["you"]),
+                                max_tokens=len(msg["you"]) // 2 + 40, temperature=0)
                 fixed = fixed.strip().split("\n")[0].strip().strip('"').strip()
                 fixed = re.sub(r"^(fixed|text)\s*:\s*", "", fixed, flags=re.I)
                 if not fixed or not only_fixed(msg["you"], fixed):

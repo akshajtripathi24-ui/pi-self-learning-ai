@@ -5,127 +5,191 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Pi Self-Learning AI</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧠</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
 <style>
-:root{--bg:#070b16;--card:#0f172a;--line:#1e293b;--text:#e2e8f0;--muted:#94a3b8;--accent:#22d3ee;--good:#4ade80;--warn:#fbbf24;--bad:#f87171;--s1:#3987e5;--s2:#d95926}
+:root{--bg:#02050c;--card:#06101f;--panel:rgba(7,18,36,.86);--line:#123049;--line2:rgba(34,211,238,.22);--text:#dbe8f5;--muted:#7f98b3;
+ --accent:#22d3ee;--accent2:#8b5cf6;--good:#4ade80;--warn:#fbbf24;--bad:#fb7185;--s1:#22d3ee;--s2:#f472b6;
+ --mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;--disp:"Orbitron","Segoe UI",system-ui,sans-serif;--glow:0 0 14px rgba(34,211,238,.45)}
 *{box-sizing:border-box}
-body{margin:0;background:radial-gradient(ellipse at top,#0b1430 0%,var(--bg) 60%);color:var(--text);font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;min-height:100vh}
-header{display:flex;align-items:center;gap:12px;padding:14px 20px;border-bottom:1px solid var(--line);flex-wrap:wrap}
-header h1{font-size:20px;margin:0;font-weight:800}
+html{scrollbar-color:#164e63 #030a16}
+body{margin:0;color:var(--text);font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;min-height:100vh;background-color:var(--bg);
+ background-image:radial-gradient(ellipse 60% 45% at 12% -5%,rgba(34,211,238,.16),transparent 70%),radial-gradient(ellipse 55% 45% at 100% 100%,rgba(139,92,246,.14),transparent 70%),
+ linear-gradient(rgba(34,211,238,.055) 1px,transparent 1px),linear-gradient(90deg,rgba(34,211,238,.055) 1px,transparent 1px),
+ linear-gradient(rgba(34,211,238,.022) 1px,transparent 1px),linear-gradient(90deg,rgba(34,211,238,.022) 1px,transparent 1px);
+ background-size:auto,auto,64px 64px,64px 64px,16px 16px,16px 16px;background-attachment:fixed}
+body::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:50;background:repeating-linear-gradient(0deg,rgba(255,255,255,.018) 0 1px,transparent 1px 3px)}
+::selection{background:rgba(34,211,238,.35)}
+/* ---------------- the control bar at the top */
+header{position:sticky;top:0;z-index:20;display:flex;align-items:center;gap:14px;padding:10px 20px;flex-wrap:wrap;
+ background:linear-gradient(180deg,rgba(2,8,20,.96),rgba(2,8,20,.86));backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
+header::after{content:"";position:absolute;left:0;right:0;bottom:-1px;height:1px;background:linear-gradient(90deg,transparent,var(--accent) 30%,var(--accent2) 70%,transparent)}
+.brand{display:flex;align-items:center;gap:12px;min-width:0}
+.brand svg{width:42px;height:42px;flex:none;filter:drop-shadow(0 0 8px rgba(34,211,238,.55))}
+.brand .eye{animation:eyes 5s infinite;transform-origin:center;transform-box:fill-box}
+@keyframes eyes{0%,92%,100%{transform:scaleY(1)}95%{transform:scaleY(.1)}}
+header h1{font-family:var(--disp);font-size:20px;margin:0;font-weight:800;letter-spacing:.14em;line-height:1.1;text-transform:uppercase}
+header h1 span{color:var(--accent);text-shadow:var(--glow)}
+.sys{font-family:var(--mono);font-size:11px;color:var(--muted);letter-spacing:.14em;display:flex;align-items:center;gap:7px;margin-top:3px;white-space:nowrap}
+.led{width:8px;height:8px;border-radius:50%;background:var(--good);box-shadow:0 0 8px var(--good);animation:pulse 2s infinite}
+@keyframes pulse{50%{opacity:.35}}
 .tabs{display:flex;gap:6px;flex-wrap:wrap;margin-left:auto}
-.tabs button{background:transparent;color:var(--muted);border:1px solid var(--line)}
-.tabs button.on{background:#0b2530;color:var(--accent);border-color:#155e75}
-main{max-width:1200px;margin:0 auto;padding:16px;display:grid;gap:16px;grid-template-columns:2fr 1fr}
+.tabs button{background:rgba(6,16,31,.7);color:var(--muted);border:1px solid var(--line);border-radius:3px;font-family:var(--disp);font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;padding:9px 12px}
+.tabs button i{font-style:normal;color:#3b6b8a;margin-right:7px;font-family:var(--mono)}
+.tabs button:hover{color:var(--text);border-color:#1d5a78}
+.tabs button.on{background:linear-gradient(180deg,rgba(34,211,238,.18),rgba(34,211,238,.04));color:var(--accent);border-color:var(--accent);box-shadow:var(--glow),inset 0 -2px 0 var(--accent)}
+.tabs button.on i{color:var(--accent)}
+main{max-width:1240px;margin:0 auto;padding:18px 16px;display:grid;gap:16px;grid-template-columns:2fr 1fr}
 @media(max-width:900px){main{grid-template-columns:1fr}.tabs{margin-left:0}}
-.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;min-width:0}
-.card h2{font-size:15px;margin:0 0 12px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.06em}
+/* ---------------- HUD panels */
+.card{position:relative;background:linear-gradient(180deg,rgba(9,24,46,.88),rgba(4,11,24,.9));border:1px solid var(--line2);border-radius:4px;padding:18px;min-width:0;box-shadow:inset 0 1px 0 rgba(34,211,238,.08),0 10px 30px rgba(0,0,0,.35)}
+.card::before,.card::after{content:"";position:absolute;width:16px;height:16px;pointer-events:none;border:2px solid var(--accent);filter:drop-shadow(0 0 4px rgba(34,211,238,.7))}
+.card::before{top:-1px;left:-1px;border-right:0;border-bottom:0}
+.card::after{bottom:-1px;right:-1px;border-left:0;border-top:0}
+.card h2{display:flex;align-items:center;gap:10px;font-family:var(--mono);font-size:12px;margin:0 0 14px;color:var(--accent);font-weight:700;text-transform:uppercase;letter-spacing:.2em}
+.card h2::before{content:"";width:7px;height:14px;background:var(--accent);box-shadow:var(--glow);flex:none}
+.card h2::after{content:"";flex:1;height:1px;background:linear-gradient(90deg,var(--line2),transparent)}
 .full{grid-column:1/-1}
 .muted{color:var(--muted);font-size:14px}
 button,select,input{font-family:inherit}
-button{background:var(--accent);color:#04131a;border:0;border-radius:8px;padding:8px 13px;font-weight:800;cursor:pointer;font-size:14px}
-button.ghost{background:transparent;color:var(--accent);border:1px solid #155e75}
-button.small{padding:5px 10px;font-size:13px}
-button:disabled{opacity:.4;cursor:default}
-select,input[type=number],input[type=text],input[type=email],input[type=password],textarea.field{padding:7px 9px;border-radius:8px;border:1px solid var(--line);background:#0b1222;color:var(--text);font-size:14px;font-family:inherit}
-.field{display:block;width:100%;margin-top:6px;font-size:16px!important;padding:10px 12px!important}
-.authbox{max-width:460px;margin:10px auto}
-.authbox h3{margin:0 0 4px;font-size:24px}
-.authbox .step{font-size:12px;font-weight:800;letter-spacing:.1em;color:var(--accent);text-transform:uppercase}
-.authbox label,.setcard label{display:block;margin-top:12px;font-size:13px;color:var(--muted);font-weight:700}
-.authbox button.go{width:100%;margin-top:14px;padding:11px;font-size:16px}
-.linkish{background:none;border:0;color:var(--accent);padding:0;font-weight:700;cursor:pointer;font-size:14px;margin-top:12px}
-.acct{display:flex;align-items:center;gap:12px;width:100%;text-align:left;background:#0b1222;border:1px solid var(--line);color:var(--text);border-radius:12px;padding:10px 12px;margin-top:8px;font-weight:800;font-size:16px}
-.acct:hover{border-color:#155e75}
-.avatar{display:inline-flex;align-items:center;justify-content:center;border-radius:50%;overflow:hidden;flex:none;color:#fff;font-weight:900}
+button{background:linear-gradient(180deg,#38e1f5,#0eb4d4);color:#021018;border:0;border-radius:3px;padding:9px 14px;font-weight:800;cursor:pointer;font-size:13px;letter-spacing:.06em;
+ clip-path:polygon(8px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 8px);transition:filter .15s,box-shadow .15s}
+button:hover{filter:brightness(1.12) drop-shadow(0 0 6px rgba(34,211,238,.6))}
+button.ghost{background:rgba(34,211,238,.06);color:var(--accent);border:1px solid rgba(34,211,238,.45);clip-path:none}
+button.ghost:hover{background:rgba(34,211,238,.14)}
+button.small{padding:6px 11px;font-size:12px}
+button:disabled{opacity:.4;cursor:default;filter:none}
+select,input[type=number],input[type=text],input[type=email],input[type=password],textarea.field{padding:8px 10px;border-radius:3px;border:1px solid var(--line);background:rgba(2,8,18,.9);color:var(--text);font-size:14px;font-family:inherit;outline:none;transition:border-color .15s,box-shadow .15s}
+select:focus,input:focus,textarea:focus{border-color:var(--accent)!important;box-shadow:0 0 0 3px rgba(34,211,238,.18),var(--glow)}
+input[type=color]{width:40px;height:30px;border:1px solid var(--line);background:transparent;padding:2px;border-radius:3px}
+.field{display:block;width:100%;margin-top:6px;font-size:16px!important;padding:11px 12px!important}
+/* ---------------- signing in: the access terminal */
+.authbox{max-width:480px;margin:10px auto}
+.authbox h3{margin:2px 0 6px;font-size:26px;font-family:var(--disp);letter-spacing:.06em}
+.authbox .step{font-family:var(--mono);font-size:11px;font-weight:700;letter-spacing:.22em;color:var(--accent);text-transform:uppercase}
+.authbox label,.setcard label{display:block;margin-top:12px;font-size:12px;color:var(--muted);font-weight:700;font-family:var(--mono);letter-spacing:.06em}
+.authbox button.go{width:100%;margin-top:14px;padding:12px;font-size:15px}
+.or{display:flex;align-items:center;gap:10px;margin:16px 0 0;color:var(--muted);font-family:var(--mono);font-size:11px;letter-spacing:.2em;text-transform:uppercase}
+.or::before,.or::after{content:"";flex:1;height:1px;background:var(--line)}
+.linkish{background:none;border:0;color:var(--accent);padding:0;font-weight:700;cursor:pointer;font-size:14px;margin-top:12px;clip-path:none}
+.acct{display:flex;align-items:center;gap:12px;width:100%;text-align:left;background:rgba(2,8,18,.85);border:1px solid var(--line);color:var(--text);border-radius:3px;padding:11px 12px;margin-top:8px;font-weight:800;font-size:16px;clip-path:none}
+.acct:hover{border-color:var(--accent);box-shadow:var(--glow);filter:none}
+.avatar{display:inline-flex;align-items:center;justify-content:center;border-radius:50%;overflow:hidden;flex:none;color:#fff;font-weight:900;box-shadow:0 0 0 2px rgba(34,211,238,.5),0 0 12px rgba(34,211,238,.35)}
 .avatar img{width:100%;height:100%;object-fit:cover}
 .me{display:flex;align-items:center;gap:8px}
 .err{color:var(--bad);font-size:14px;margin-top:10px;min-height:18px}
 .good{color:var(--good);font-size:14px;margin-top:10px}
-.note{background:#0b1222;border:1px solid var(--line);border-radius:10px;padding:10px 12px;font-size:13px;color:var(--muted);margin-top:12px}
+.note{background:rgba(2,8,18,.75);border:1px solid var(--line);border-left:3px solid var(--accent);border-radius:3px;padding:10px 12px;font-size:13px;color:var(--muted);margin-top:12px}
 .uses{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
-.uses label{display:flex;align-items:center;gap:6px;margin:0;background:#0b1222;border:1px solid var(--line);border-radius:999px;padding:6px 12px;color:var(--text);font-size:14px;font-weight:600;cursor:pointer}
-.uses label:has(input:checked){border-color:var(--accent);color:var(--accent)}
+.uses label{display:flex;align-items:center;gap:6px;margin:0;background:rgba(2,8,18,.85);border:1px solid var(--line);border-radius:3px;padding:7px 12px;color:var(--text);font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;letter-spacing:0}
+.uses label:has(input:checked){border-color:var(--accent);color:var(--accent);box-shadow:var(--glow)}
 .emojis{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
-.emojis button{background:#0b1222;border:1px solid var(--line);font-size:22px;padding:4px 8px}
-.secret{font-family:ui-monospace,monospace;font-size:18px;letter-spacing:.08em;background:#0b1222;border:1px dashed #155e75;border-radius:8px;padding:8px 10px;margin-top:8px;word-break:break-all}
+.emojis button{background:rgba(2,8,18,.85);border:1px solid var(--line);font-size:22px;padding:4px 8px;clip-path:none}
+.secret{font-family:var(--mono);font-size:18px;letter-spacing:.1em;background:rgba(2,8,18,.9);border:1px dashed var(--accent);border-radius:3px;padding:9px 11px;margin-top:8px;word-break:break-all;color:var(--accent)}
 .bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:10px}
+/* ---------------- readouts */
 .stats{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-.stat{background:#0b1222;border:1px solid var(--line);border-radius:10px;padding:9px 11px}
-.stat .k{font-size:12px;color:var(--muted)}.stat .v{font-size:19px;font-weight:800;margin-top:2px}
-.big{font-size:34px;font-weight:900;color:var(--accent);line-height:1.1}
-.levels{display:flex;gap:5px;margin:8px 0 4px}
-.levels span{flex:1;height:8px;border-radius:4px;background:#1e293b}
-.levels span.done{background:var(--accent)}.levels span.now{background:#155e75;box-shadow:0 0 0 1px var(--accent) inset}
-.feed{list-style:none;padding:0;margin:0;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
-.feed li{display:flex;justify-content:space-between;gap:10px;padding:6px 4px;border-bottom:1px solid var(--line);font-size:16px}
-.feed li .r{color:var(--muted);font-size:13px}
+.stat{background:rgba(2,8,18,.8);border:1px solid var(--line);border-top:2px solid rgba(34,211,238,.5);border-radius:3px;padding:9px 11px}
+.stat .k{font-family:var(--mono);font-size:10px;color:var(--muted);letter-spacing:.14em;text-transform:uppercase}
+.stat .v{font-family:var(--disp);font-size:18px;font-weight:700;margin-top:4px;color:#eaf6ff}
+.big{font-family:var(--disp);font-size:30px;font-weight:800;color:var(--accent);line-height:1.15;text-shadow:var(--glow)}
+.levels{display:flex;gap:5px;margin:10px 0 4px}
+.levels span{flex:1;height:8px;border-radius:1px;background:#0c2235;transform:skewX(-20deg)}
+.levels span.done{background:var(--accent);box-shadow:var(--glow)}.levels span.now{background:#155e75;box-shadow:0 0 0 1px var(--accent) inset;animation:pulse 1.6s infinite}
+.feed{list-style:none;padding:0;margin:0;font-family:var(--mono)}
+.feed li{display:flex;justify-content:space-between;gap:10px;padding:7px 4px;border-bottom:1px dashed var(--line);font-size:15px}
+.feed li .r{color:var(--muted);font-size:12px}
 .ok{color:var(--good)}.no{color:var(--bad)}
-.qa{border-bottom:1px solid var(--line);padding:10px 0;font-size:14px}
-.qa .p{color:var(--text)}.qa .m{color:var(--muted);font-family:ui-monospace,monospace;font-size:13px;margin-top:4px}
+.qa{border-bottom:1px dashed var(--line);padding:10px 0;font-size:14px}
+.qa .p{color:var(--text)}.qa .m{color:var(--muted);font-family:var(--mono);font-size:12px;margin-top:4px}
 .chart{position:relative}
 .chart svg{display:block;width:100%;height:auto;touch-action:pan-y}
-.chart .axis{fill:var(--muted);font-size:11px}.chart .gridl{stroke:#1e293b;stroke-width:1}
-.tip{position:absolute;pointer-events:none;background:#0b1222;border:1px solid #334155;border-radius:8px;padding:6px 9px;font-size:12px;white-space:nowrap;display:none;color:var(--text)}
-.legend{display:flex;gap:16px;font-size:13px;color:var(--muted);margin:2px 0 6px;flex-wrap:wrap}
+.chart .axis{fill:var(--muted);font-size:11px;font-family:var(--mono)}.chart .gridl{stroke:#0f2a40;stroke-width:1}
+.tip{position:absolute;pointer-events:none;background:rgba(2,8,18,.96);border:1px solid var(--accent);border-radius:3px;padding:6px 9px;font-size:12px;white-space:nowrap;display:none;color:var(--text);font-family:var(--mono);box-shadow:var(--glow)}
+.legend{display:flex;gap:16px;font-size:12px;color:var(--muted);margin:2px 0 6px;flex-wrap:wrap;font-family:var(--mono)}
 .legend i{display:inline-block;width:14px;height:3px;border-radius:2px;vertical-align:middle;margin-right:6px}
-.skill{display:grid;grid-template-columns:180px 1fr 48px;gap:10px;align-items:center;margin:7px 0;font-size:14px}
-.skill .track{height:12px;background:#1e293b;border-radius:6px;overflow:hidden}.skill .fill{height:100%;background:var(--s1);border-radius:6px}
+.skill{display:grid;grid-template-columns:180px 1fr 48px;gap:10px;align-items:center;margin:7px 0;font-size:13px}
+.skill .track{height:10px;background:#0c2235;border-radius:1px;overflow:hidden}.skill .fill{height:100%;background:linear-gradient(90deg,#0e7490,var(--accent));box-shadow:var(--glow)}
 @media(max-width:500px){.skill{grid-template-columns:120px 1fr 40px;font-size:12px}}
-.heat{border-collapse:collapse;margin-top:10px;font-family:ui-monospace,monospace}
-.heat td,.heat th{width:30px;height:28px;text-align:center;font-size:13px;border:1px solid #0f172a}
+.heat{border-collapse:collapse;margin-top:10px;font-family:var(--mono)}
+.heat td,.heat th{width:30px;height:28px;text-align:center;font-size:13px;border:1px solid #06101f}
 .heat th{color:var(--muted);font-weight:600}
-.progress{height:10px;background:#1e293b;border-radius:5px;overflow:hidden;margin:10px 0}.progress div{height:100%;background:var(--accent)}
-.round{border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-top:10px;background:#0b1222}
-.round h3{margin:0 0 6px;font-size:14px}.round ul{margin:6px 0 0;padding-left:18px;font-family:ui-monospace,monospace;font-size:13px;color:#cbd5e1}
+.progress{height:8px;background:#0c2235;border-radius:1px;overflow:hidden;margin:10px 0}.progress div{height:100%;background:linear-gradient(90deg,#0e7490,var(--accent));box-shadow:var(--glow)}
+.round{border:1px solid var(--line);border-radius:3px;padding:10px 12px;margin-top:10px;background:rgba(2,8,18,.8)}
+.round h3{margin:0 0 6px;font-size:14px}.round ul{margin:6px 0 0;padding-left:18px;font-family:var(--mono);font-size:12px;color:#b9cce0}
 .check{display:flex;align-items:center;gap:8px;margin-top:10px;font-size:14px}
-label{display:block;font-size:13px;color:var(--muted);margin:10px 0 4px}
+input[type=checkbox]{accent-color:var(--accent);width:16px;height:16px}
+label{display:block;font-size:12px;color:var(--muted);margin:10px 0 4px;font-family:var(--mono);letter-spacing:.04em}
 .row{display:flex;gap:10px;flex-wrap:wrap}.row>div{flex:1;min-width:110px}.row input,.row select{width:100%}
 .msg{font-size:13px;margin-top:8px;min-height:18px}
-.pill{font-size:12px;padding:4px 10px;border-radius:999px;background:#0b2530;color:var(--accent);border:1px solid #155e75}
-.pill.warn{background:#2a1f05;color:var(--warn);border-color:#854d0e}.pill.off{background:#1f2937;color:var(--muted);border-color:#334155}
-table.t{border-collapse:collapse;font-size:13px;width:100%}.t td,.t th{padding:5px 6px;border-bottom:1px solid var(--line);text-align:left}.t th{color:var(--muted);font-weight:600}
-code{background:#0b1222;border:1px solid var(--line);padding:2px 6px;border-radius:6px;font-size:13px}
-footer{text-align:center;color:var(--muted);font-size:12px;padding:20px}footer a{color:var(--muted)}
+.pill{font-family:var(--mono);font-size:11px;letter-spacing:.08em;padding:4px 10px;border-radius:2px;background:rgba(34,211,238,.1);color:var(--accent);border:1px solid rgba(34,211,238,.5);text-transform:uppercase}
+.pill.warn{background:rgba(251,191,36,.08);color:var(--warn);border-color:#854d0e}.pill.off{background:#0b1626;color:var(--muted);border-color:#25415a}
+table.t{border-collapse:collapse;font-size:13px;width:100%}.t td,.t th{padding:6px 6px;border-bottom:1px dashed var(--line);text-align:left}.t th{color:var(--muted);font-weight:600;font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase}
+code{background:rgba(2,8,18,.9);border:1px solid var(--line);padding:2px 6px;border-radius:2px;font-size:12px;font-family:var(--mono);color:#a5f3fc}
+footer{text-align:center;color:var(--muted);font-size:11px;padding:22px;font-family:var(--mono);letter-spacing:.14em;text-transform:uppercase}footer a{color:var(--accent)}
 .hide{display:none!important}
-.chatlog{display:flex;flex-direction:column;gap:10px;max-height:62vh;overflow-y:auto;padding:4px 2px}
-.bubble{max-width:85%;padding:10px 13px;border-radius:14px;font-size:15px;line-height:1.45;white-space:pre-wrap;overflow-wrap:anywhere}
-.bubble.you{align-self:flex-end;background:#0b2530;border:1px solid #155e75}
-.bubble.ai{align-self:flex-start;background:#111a2e;border:1px solid var(--line)}
-.bubble .fix{font-size:12px;color:var(--muted);margin-top:6px;white-space:normal}
+/* ---------------- the chat: talking to the robot */
+.chatlog{display:flex;flex-direction:column;gap:12px;max-height:62vh;overflow-y:auto;padding:6px 4px}
+.bubble{position:relative;max-width:85%;padding:11px 14px;border-radius:3px;font-size:15px;line-height:1.5;white-space:pre-wrap;overflow-wrap:anywhere}
+.bubble.you{align-self:flex-end;background:linear-gradient(135deg,rgba(139,92,246,.22),rgba(76,29,149,.18));border:1px solid rgba(139,92,246,.5);border-right:3px solid var(--accent2)}
+.bubble.ai{align-self:flex-start;background:linear-gradient(135deg,rgba(9,30,52,.95),rgba(4,14,28,.95));border:1px solid var(--line2);border-left:3px solid var(--accent);box-shadow:-4px 0 14px -6px rgba(34,211,238,.6)}
+.bubble.ai::before{content:"◉ PI·AI";display:block;font-family:var(--mono);font-size:10px;letter-spacing:.2em;color:var(--accent);margin-bottom:5px;opacity:.85}
+.bubble.you::before{content:"YOU ◉";display:block;text-align:right;font-family:var(--mono);font-size:10px;letter-spacing:.2em;color:#c4b5fd;margin-bottom:5px;opacity:.85}
+.bubble .fix{font-size:12px;color:var(--muted);margin-top:7px;white-space:normal}
 .chatbox{display:flex;gap:8px;margin-top:6px;align-items:stretch}
-.chatwrap{display:grid;grid-template-columns:240px minmax(0,1fr);gap:16px;margin-top:8px}
+.chatwrap{display:grid;grid-template-columns:250px minmax(0,1fr);gap:16px;margin-top:8px}
 .chatside{border-right:1px solid var(--line);padding-right:14px;min-width:0}
 #chatlist{max-height:62vh;overflow-y:auto}
-.chatitem{display:block;width:100%;text-align:left;background:transparent;color:var(--text);border:1px solid transparent;border-radius:8px;padding:8px 10px;margin-bottom:4px;font-weight:600;font-size:14px;cursor:pointer}
-.chatitem:hover{background:#111a2e}
-.chatitem.on{background:#0b2530;border-color:#155e75;color:var(--accent)}
-.chatitem .when{display:block;font-size:11px;color:var(--muted);font-weight:400;margin-top:2px}
-.chathead{display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--line);padding-bottom:8px;margin-bottom:8px;min-width:0}
-.chathead b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.chatitem{display:block;width:100%;text-align:left;background:transparent;color:var(--text);border:1px solid transparent;border-radius:3px;padding:8px 10px;margin-bottom:4px;font-weight:600;font-size:14px;cursor:pointer;clip-path:none}
+.chatitem:hover{background:rgba(34,211,238,.06);filter:none}
+.chatitem.on{background:rgba(34,211,238,.1);border-color:rgba(34,211,238,.5);color:var(--accent);box-shadow:inset 3px 0 0 var(--accent)}
+.chatitem .when{display:block;font-size:10px;color:var(--muted);font-weight:400;margin-top:3px;font-family:var(--mono);letter-spacing:.06em}
+.chathead{display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--line);padding-bottom:9px;margin-bottom:8px;min-width:0}
+.chathead b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:var(--disp);letter-spacing:.06em;font-size:15px}
 .bubble .fix a{color:var(--accent);cursor:pointer}
-.bubble .acts{display:flex;gap:6px;margin-top:8px;white-space:normal}
-.bubble .act{background:transparent;border:1px solid var(--line);color:var(--muted);padding:2px 9px;font-size:12px;border-radius:6px;font-weight:600}
-.bubble .act:hover{color:var(--accent);border-color:#155e75}
-.bubble details.steps{margin-top:6px;font-size:13px;color:var(--muted);white-space:normal}
+.bubble .acts{display:flex;gap:6px;margin-top:9px;white-space:normal;flex-wrap:wrap}
+.bubble .act{background:transparent;border:1px solid var(--line);color:var(--muted);padding:3px 9px;font-size:11px;border-radius:2px;font-weight:600;clip-path:none;font-family:var(--mono);letter-spacing:.04em}
+.bubble .act:hover{color:var(--accent);border-color:var(--accent);filter:none}
+.bubble details.steps{margin-top:7px;font-size:13px;color:var(--muted);white-space:normal}
 .bubble details.steps summary{cursor:pointer}
 .bubble details.steps ol{margin:6px 0 0;padding-left:20px}
-.cursor{display:inline-block;animation:blink 1s steps(1) infinite;color:var(--accent)}
+.cursor{display:inline-block;width:.55em;height:1.05em;vertical-align:-2px;background:var(--accent);box-shadow:var(--glow);animation:blink 1s steps(1) infinite;color:transparent;margin-left:2px}
 @keyframes blink{50%{opacity:0}}
 @media (max-width:760px){.chatwrap{grid-template-columns:1fr}.chatside{border-right:0;padding-right:0;border-bottom:1px solid var(--line);padding-bottom:10px}#chatlist{max-height:180px}}
 .pair{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:6px}
-.pair .opt{border:1px solid var(--line);border-radius:10px;padding:8px 10px;background:#0b1222;white-space:pre-wrap}
-.pair .opt b{display:block;color:var(--accent);font-size:12px;margin-bottom:4px}
+.pair .opt{border:1px solid var(--line);border-radius:3px;padding:9px 11px;background:rgba(2,8,18,.85);white-space:pre-wrap}
+.pair .opt b{display:block;color:var(--accent);font-size:10px;margin-bottom:5px;font-family:var(--mono);letter-spacing:.2em;text-transform:uppercase}
 .bubble.wide{max-width:100%;width:100%}
 .suggest{display:flex;flex-wrap:wrap;gap:8px;align-self:flex-start;max-width:85%}
-.chip{background:#111a2e;border:1px solid var(--line);color:var(--text);border-radius:999px;padding:6px 12px;font-size:13px;font-weight:600;cursor:pointer;text-align:left}
-.chip:hover{border-color:#155e75;color:var(--accent)}
+.chip{background:rgba(6,16,31,.9);border:1px solid rgba(34,211,238,.35);color:var(--text);border-radius:3px;padding:7px 12px;font-size:13px;font-weight:600;cursor:pointer;text-align:left;clip-path:none}
+.chip:hover{border-color:var(--accent);color:var(--accent);box-shadow:var(--glow);filter:none}
 @media (max-width:600px){.pair{grid-template-columns:1fr}}
-.chatbox textarea{flex:1;resize:vertical;min-height:46px;padding:9px 11px;border-radius:10px;border:1px solid var(--line);background:#0b1222;color:var(--text);font:inherit;font-size:15px}
+.chatbox textarea{flex:1;resize:vertical;min-height:48px;padding:10px 12px;border-radius:3px;border:1px solid var(--line);background:rgba(2,8,18,.92);color:var(--text);font:inherit;font-size:15px;outline:none}
+#chatsend,#chatstop{min-width:86px;font-family:var(--disp);letter-spacing:.12em;text-transform:uppercase;font-size:12px}
+/* ---------------- start-up screen */
+#boot{position:fixed;inset:0;z-index:100;background:var(--bg);display:flex;align-items:center;justify-content:center;transition:opacity .45s}
+#boot.done{opacity:0;pointer-events:none}
+#boot pre{font-family:var(--mono);color:var(--accent);font-size:14px;line-height:1.7;text-shadow:var(--glow);margin:0;min-width:300px}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+@media (max-width:760px){header{position:static}}
+@media (max-width:560px){header{padding:10px 12px}header h1{font-size:16px}.brand svg{width:34px;height:34px}.tabs button{padding:8px 9px;font-size:10px}.tabs button i{display:none}}
 </style>
 </head>
 <body>
+<div id="boot" aria-hidden="true"><pre id="bootlog"></pre></div>
 <header>
-  <h1>🧠 Pi Self-Learning AI</h1>
-  <div class="tabs"><button id="tab-math" class="on">🧮 Math AI</button><button id="tab-bot">💬 Chatbot</button><button id="tab-col">🔬 Collapse experiment</button><button id="tab-chat">🗨️ Chat</button><button id="tab-settings">⚙️ Settings</button></div>
+  <div class="brand">
+    <svg viewBox="0 0 48 48" aria-hidden="true">
+      <line x1="24" y1="4" x2="24" y2="11" stroke="#22d3ee" stroke-width="2"/><circle cx="24" cy="4" r="2.6" fill="#22d3ee"><animate attributeName="opacity" values="1;.3;1" dur="1.6s" repeatCount="indefinite"/></circle>
+      <rect x="7" y="11" width="34" height="26" rx="6" fill="#06142a" stroke="#22d3ee" stroke-width="2"/>
+      <rect x="3" y="19" width="4" height="10" rx="1.5" fill="#22d3ee"/><rect x="41" y="19" width="4" height="10" rx="1.5" fill="#22d3ee"/>
+      <rect class="eye" x="14" y="18" width="7" height="7" rx="1.5" fill="#22d3ee"/><rect class="eye" x="27" y="18" width="7" height="7" rx="1.5" fill="#22d3ee"/>
+      <rect x="16" y="29" width="16" height="3" rx="1.5" fill="#8b5cf6"/>
+      <path d="M14 41h20l-3 4H17z" fill="#123049" stroke="#22d3ee" stroke-width="1.2"/>
+    </svg>
+    <div><h1>PI<span>·</span>AI</h1><div class="sys"><span class="led"></span>SELF-LEARNING SYSTEM · <span id="clock">ONLINE</span></div></div>
+  </div>
+  <div class="tabs"><button id="tab-math" class="on"><i>01</i>Math AI</button><button id="tab-bot"><i>02</i>Chatbot</button><button id="tab-col"><i>03</i>Collapse</button><button id="tab-chat"><i>04</i>Chat</button><button id="tab-settings"><i>05</i>Settings</button></div>
   <div class="me" id="mebox"></div>
 </header>
 
@@ -179,6 +243,12 @@ footer{text-align:center;color:var(--muted);font-size:12px;padding:20px}footer a
 
 <!-- ============================================================ part 5: settings -->
 <main id="page-settings" class="hide">
+  <section class="card full hide" id="setguest">
+    <h2>👻 You're a guest</h2>
+    <p>Guests can chat with the AI, but nothing is saved: no settings, no profile, and your chats are deleted when you close the website.</p>
+    <p class="muted">Want to keep your chats, add a profile picture and tell the AI what you use it for? Create an account.</p>
+    <div class="bar"><button id="setguestgo">Create an account</button></div>
+  </section>
   <section class="card setcard">
     <h2>👤 Profile</h2>
     <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap">
@@ -287,6 +357,7 @@ footer{text-align:center;color:var(--muted);font-size:12px;padding:20px}footer a
       <div class="check"><input type="checkbox" id="xt-decimals" class="xtopic" value="decimals"><label for="xt-decimals" style="margin:0">Decimals (2.5 × 4)</label></div>
       <div class="check"><input type="checkbox" id="xt-algebra" class="xtopic" value="algebra"><label for="xt-algebra" style="margin:0">Algebra (solve for x)</label></div>
       <div class="check"><input type="checkbox" id="xt-calculus" class="xtopic" value="calculus"><label for="xt-calculus" style="margin:0">Calculus (derivatives)</label></div>
+      <div class="check"><input type="checkbox" id="xt-spelling" class="xtopic" value="spelling"><label for="xt-spelling" style="margin:0">✏️ Spelling fixes (trains the Chat tab's spelling fixer)</label></div>
     </div>
     <div class="bar"><button id="xstart">🧪 Start a new experiment with these settings</button></div>
     <p class="muted" style="font-size:12px">Starting a new experiment saves this one and empties the notebook. To try the bigger model, run <code>bash setup-llamacpp.sh 1.5b</code> on the Pi: when it finds a different model, it starts a new experiment by itself.</p>
@@ -302,12 +373,13 @@ footer{text-align:center;color:var(--muted);font-size:12px;padding:20px}footer a
 <main id="page-chat" class="hide">
   <section class="card full">
     <h2>🗨️ Talk to the AI</h2>
-    <p class="muted" style="margin-top:0">Ask anything, even with spelling mistakes. ✏️ It fixes your message, 🧮 a math engine works out any arithmetic, decimals, algebra or calculus exactly, 🧠 your trained math AI has a go too, 📒 checked practice problems help with word problems, and 🔗 it remembers related things from your other chats. Every chat is saved on the Pi. It's the same small AI as the Chatbot tab (<b id="chatmodel">not connected yet</b>), so it can still be wrong about facts. <a href="https://github.com/akshajtripathi24-ui/pi-self-learning-ai/blob/main/docs/07-chat.md" target="_blank" rel="noopener" style="color:var(--accent)">How it works</a></p>
+    <p class="muted" style="margin-top:0">Ask anything, even with spelling mistakes. ✏️ It fixes your message, 🧮 a math engine works out any arithmetic, decimals, algebra or calculus exactly, 🧠 your trained math AI has a go too, 📒 checked practice problems help with word problems, and 🔗 it remembers related things from your other chats. Your chats are saved on the Pi, locked so only you can read them (as a guest, nothing is saved). It's the same small AI as the Chatbot tab (<b id="chatmodel">not connected yet</b>), so it can still be wrong about facts. <a href="https://github.com/akshajtripathi24-ui/pi-self-learning-ai/blob/main/docs/07-chat.md" target="_blank" rel="noopener" style="color:var(--accent)">How it works</a></p>
     <div class="chatwrap">
       <aside class="chatside">
         <button id="chatnew" style="width:100%">➕ New chat</button>
         <input type="text" id="chatsearch" placeholder="🔍 Search your chats" aria-label="Search your chats" style="width:100%;margin:10px 0">
         <div id="chatlist"></div>
+        <p class="note hide" id="chatguest">👻 <b>Guest mode:</b> nothing is saved. When you close the website, these chats are deleted.</p>
         <div class="check"><input type="checkbox" id="chatsuggest"><label for="chatsuggest" style="margin:0">💡 Suggest follow-up questions</label></div>
         <div class="check"><input type="checkbox" id="chatcompare"><label for="chatcompare" style="margin:0">🆚 Sometimes show 2 answers to pick from</label></div>
         <p class="muted" id="chatpicks" style="font-size:12px;margin:6px 0 0"></p>
@@ -353,7 +425,7 @@ footer{text-align:center;color:var(--muted);font-size:12px;padding:20px}footer a
     <div class="chart" id="cchart2"></div>
   </section>
 </main>
-<footer>A student project. <a href="https://github.com/akshajtripathi24-ui/pi-self-learning-ai" target="_blank">Code and guide on GitHub</a></footer>
+<footer>Pi Self-Learning AI · runs on a Raspberry Pi 4 · a student project · <a href="https://github.com/akshajtripathi24-ui/pi-self-learning-ai" target="_blank">code and guide</a></footer>
 
 <script>
 const $ = id => document.getElementById(id);
@@ -438,7 +510,7 @@ async function loadMath() {
   $('mpause').textContent = m.paused ? '▶️ Resume' : '⏸️ Pause';
   $('feed').innerHTML = m.feed.map(f => `<li><span>${f.review ? '📒 ' : ''}${esc(f.q)} = ${f.answer == null ? '?' : f.answer}</span><span class="${f.ok ? 'ok' : 'no'}">${f.ok ? '✅' : '❌ <span class="r">(it\'s ' + f.truth + ')</span>'}</span></li>`).join('') || '<li class="muted">Starting…</li>';
   $('skills').innerHTML = m.skills.map(s => `<div class="skill"><span>${esc(s.label)}</span><div class="track"><div class="fill" style="width:${s.acc}%"></div></div><b>${s.acc}%</b></div>`).join('');
-  lineChart($('mchart'), [{name: 'Test score', color: '#3987e5', points: m.tests.map(t => [t[0], t[2]])}],
+  lineChart($('mchart'), [{name: 'Test score', color: '#22d3ee', points: m.tests.map(t => [t[0], t[2]])}],
     {yMax: 100, yTick: 25, ySuffix: '%', ref: m.pass, xName: 'Round', label: 'Test scores', markers: m.level_ups.map(u => [u[0], 'L' + (u[1] + 1)]), empty: 'The first test is after 100 rounds.'});
 }
 $('mpause').onclick = async () => { await post(math && math.paused ? '/api/math/resume' : '/api/math/pause'); loadMath(); };
@@ -457,7 +529,7 @@ $('qgo').onclick = async () => {
     $('qout').innerHTML = `<div class="muted">Answered by course ${r.course}</div><div style="font-size:22px;font-weight:800;margin:6px 0">${esc(r.question)} = ${r.answer == null ? '?' : esc(r.answer)} <span class="${ok ? 'ok' : 'no'}">${ok ? '✅' : '❌ (it\'s ' + esc(r.truth) + ')'}</span></div>
       <div class="muted">Where it "looked" while writing each part of the answer (its attention):</div>
       <table class="heat"><tr><th></th>${r.tokens.map(t => `<th>${esc(t === 'S' ? '∫' : t)}</th>`).join('')}</tr>` +
-      att.map((row, i) => `<tr><th style="width:auto;padding-right:6px;text-align:right">${esc(r.rows[i] || '')}</th>${row.map(v => `<td style="background:rgba(57,135,229,${Math.min(1, v * 2.2).toFixed(2)})"></td>`).join('')}</tr>`).join('') + '</table>' +
+      att.map((row, i) => `<tr><th style="width:auto;padding-right:6px;text-align:right">${esc(r.rows[i] || '')}</th>${row.map(v => `<td style="background:rgba(34,211,238,${Math.min(1, v * 2.2).toFixed(2)})"></td>`).join('')}</tr>`).join('') + '</table>' +
       '<div class="muted" style="font-size:12px;margin-top:6px">Brighter = looked more. For adding, a good math AI looks at the matching digits (ones at the ones), like you do!</div>';
   } catch (e) { $('qout').textContent = '❌ ' + e.message; }
 };
@@ -496,8 +568,8 @@ async function loadBot() {
     || (b.running ? '<p class="muted">Working on the first question. Each round takes about 15–60 seconds on a Pi, or longer while the Docking AI is running.</p>'
                   : '<p class="muted">Press ▶ Start practicing. You need a language model running first: see the guide.</p>');
   lineChart($('bchart'), [
-    {name: 'With the notebook', color: '#3987e5', points: b.history.filter(h => h[1][1]).map(h => [h[0], 100 * h[1][0] / h[1][1]])},
-    {name: 'Without the notebook', color: '#d95926', points: b.history.filter(h => h[2][1]).map(h => [h[0], 100 * h[2][0] / h[2][1]])}],
+    {name: 'With the notebook', color: '#22d3ee', points: b.history.filter(h => h[1][1]).map(h => [h[0], 100 * h[1][0] / h[1][1]])},
+    {name: 'Without the notebook', color: '#f472b6', points: b.history.filter(h => h[2][1]).map(h => [h[0], 100 * h[2][0] / h[2][1]])}],
     {yMax: 100, yTick: 25, ySuffix: '%', xName: 'Round', label: 'Accuracy with and without the notebook', empty: 'The chart starts after a few practice rounds.'});
   $('bnote').innerHTML = b.notebook.length ? '<table class="t"><tr><th>Problem</th><th>Correct math</th><th>Answer</th></tr>' +
     b.notebook.map(e => `<tr><td>${esc(e.problem)}</td><td><code>${esc(e.math)}</code></td><td><b>${e.answer}</b></td></tr>`).join('') + `</table><p class="muted">${b.notebook_size} pages in total.</p>` : '<p class="muted">Empty so far.</p>';
@@ -538,7 +610,7 @@ async function loadCol() {
   $('crounds-out').innerHTML = run ? run.results.slice().reverse().map(r => `<div class="round"><h3>Round ${r.round} <span class="muted">· learned from ${esc(r.learned_from)}</span></h3>
     <div class="muted">Different words: <b style="color:var(--text)">${r.different_words}</b> · different sentences: <b style="color:var(--text)">${r.different_sentences}%</b> · real words: <b style="color:var(--text)">${r.real_words}%</b> · surprise at the real facts: <b style="color:var(--text)">${r.surprise}</b></div>
     <ul>${r.samples.slice(0, 6).map(s => `<li>${esc(s)}</li>`).join('')}</ul></div>`).join('') : '';
-  const runs = c.runs.filter(r => r.results.length).slice(0, 3), colors = ['#3987e5', '#d95926', '#94a3b8'];
+  const runs = c.runs.filter(r => r.results.length).slice(0, 3), colors = ['#22d3ee', '#f472b6', '#94a3b8'];
   const name = r => (r.settings.keep_real ? 'With real facts' : 'Only its own writing') + ' (' + new Date(r.started * 1000).toLocaleTimeString([], {hour: 'numeric', minute: '2-digit'}) + ')';
   $('clegend').innerHTML = runs.map((r, i) => `<span><i style="background:${colors[i]}"></i>${esc(name(r))}</span>`).join('');
   lineChart($('cchart1'), runs.map((r, i) => ({name: name(r), color: colors[i], points: r.results.map(x => [x.round, x.different_words])})), {xName: 'Round', xMin: 0, xTicks: 5, label: 'Different words per round', empty: 'Start an experiment to see the chart.'});
@@ -582,6 +654,7 @@ async function loadChat() {
     document.querySelectorAll('#chatlist .chatitem').forEach(b => b.onclick = () => openChat(b.dataset.chat || null));
   }
   $('chattitle').textContent = c.chat ? c.chat.title : 'New chat';
+  $('chatguest').classList.toggle('hide', !(me && me.guest));
   $('chatrename').disabled = $('chatdelete').disabled = !c.chat;
   const msgs = c.chat ? c.chat.messages : [];
   const html = msgs.map((m, mi) => {
@@ -747,7 +820,9 @@ function avatarHtml(av, size, name) {
 }
 async function loadMe() { try { me = await api('/api/me'); } catch (e) { me = {signed_in: false}; } showMe(); }
 function showMe() {
-  $('mebox').innerHTML = me && me.signed_in
+  $('mebox').innerHTML = me && me.signed_in && me.guest
+    ? `<span class="avatar" style="width:30px;height:30px;font-size:17px;background:linear-gradient(135deg,#334155,#64748b)">👻</span><b style="font-size:14px">Guest</b><button class="ghost small" id="melogout">Leave</button>`
+    : me && me.signed_in
     ? `${avatarHtml(me.avatar, 30, me.name)}<b style="font-size:14px">${esc(me.name)}</b><button class="ghost small" id="melogout">Log out</button>`
     : `<button class="small" id="mesignin">Sign in</button>`;
   if ($('melogout')) $('melogout').onclick = logout;
@@ -763,6 +838,8 @@ async function signedIn() {
   auth = {step: 'email'}; chat = null; chatId = null; store.set('chat', ''); chatHtml = chatListHtml = '';
   await loadMe(); setTab(tab);
 }
+// a guest's chats are deleted as soon as the page closes (and after 30 quiet minutes, if this message doesn't get through)
+window.addEventListener('pagehide', () => { if (me && me.guest && navigator.sendBeacon) navigator.sendBeacon('/api/auth/logout'); });
 // signing in: 1. email -> 2. code -> 3. pick an account -> 4. its password (-> 5. two-step code, if it's on)
 let auth = {step: 'email'};
 function renderAuth() {
@@ -774,6 +851,9 @@ function renderAuth() {
       <p class="muted">Type your email and we'll send you a 6-digit code, to prove it's yours. <b>We'll never ask for your email's password</b> (a website that does is probably a scam).</p>
       <label for="aemail">Email</label><input type="email" id="aemail" class="field" autocomplete="email" value="${esc(a.email || '')}">
       <button class="go" id="ago">Send me a code</button>
+      <div class="or"><span>or</span></div>
+      <button class="go ghost" id="aguest">👻 Use as a guest</button>
+      <p class="muted" style="font-size:13px;margin-top:8px">No account needed. Nothing is saved: when you close the website, everything you asked is deleted.</p>
       ${testMode ? '<div class="note">🧪 Test mode: this Pi isn\'t set up to send emails yet, so the code goes in the Pi\'s log. See docs/08-accounts.md to set up email.</div>' : ''}`;
   else if (a.step === 'code') h = `<div class="step">Step 1 of 2 · your email</div><h3>Check your email</h3>
       <p class="muted">${a.how === 'log' ? `🧪 Test mode: the code for <b>${esc(a.sentTo)}</b> is in the Pi's log. On the Pi, run: <code>journalctl -u selflearning -n 5</code>` : `We sent a 6-digit code to <b>${esc(a.sentTo)}</b>. It works for 10 minutes. (Check spam too.)`}</p>
@@ -802,6 +882,9 @@ function renderAuth() {
   box.querySelectorAll('[data-acct]').forEach(b => b.onclick = () => { Object.assign(auth, {step: 'password', account: b.dataset.acct, username: b.dataset.name, err: ''}); renderAuth(); });
   if ($('anew')) $('anew').onclick = () => { Object.assign(auth, {step: 'signup', err: ''}); renderAuth(); };
   if ($('ago')) $('ago').onclick = authGo;
+  if ($('aguest')) $('aguest').onclick = async () => {
+    try { await post('/api/auth/guest'); await signedIn(); setTab('chat'); } catch (e) { $('aerr').textContent = e.message; }
+  };
   box.querySelectorAll('input').forEach(i => i.addEventListener('keydown', e => { if (e.key === 'Enter') authGo(); }));
   const first = box.querySelector('input'); if (first) first.focus();
 }
@@ -840,6 +923,9 @@ const EMOJIS = ['🤖', '🚀', '🛰️', '🪐', '👽', '🐱', '🐶', '🦊
 let draftAvatar, settingsShown = false;
 function loadSettings() {
   if (!me || !me.signed_in || settingsShown) return;
+  document.querySelectorAll('#page-settings .setcard').forEach(c => c.classList.toggle('hide', !!me.guest));
+  $('setguest').classList.toggle('hide', !me.guest);
+  if (me.guest) return;
   settingsShown = true;
   draftAvatar = me.avatar;
   $('setname').value = me.name; $('setuser').textContent = 'Username: ' + me.username;
@@ -919,11 +1005,29 @@ function show2fa() {
   if ($('tfaoff')) $('tfaoff').onclick = async () => { const r = await act('set2famsg', () => post('/api/me/2fa/off', {password: $('tfaoffpw').value}), 'Two-step verification is off.'); if (r) { me = Object.assign(me, r); show2fa(); } };
 }
 $('setlogout').onclick = logout;
+$('setguestgo').onclick = logout;              // (leaving the guest pass shows the sign-in screen)
 $('setdel').onclick = async () => {
   if (!confirm('Delete your account and ALL its chats? This can\'t be undone.')) return;
   const r = await act('setdelmsg', () => post('/api/me/delete', {password: $('setdelpw').value}), 'Deleted.');
   if (r) { settingsShown = false; logout(); }
 };
+
+// ---------------------------------------------------------------- the start-up screen and the clock
+(function boot() {
+  const box = $('boot');
+  let seen = false;
+  try { seen = sessionStorage.getItem('booted') === '1'; sessionStorage.setItem('booted', '1'); } catch (e) {}
+  if (seen || matchMedia('(prefers-reduced-motion: reduce)').matches) { box.remove(); return; }
+  const lines = ['> PI·AI SELF-LEARNING SYSTEM', '> neural networks ......... OK', '> math engine ............. OK',
+                 '> language model .......... OK', '> sensors and memory ...... OK', '> ALL SYSTEMS ONLINE'];
+  let k = 0;
+  const t = setInterval(() => {
+    $('bootlog').textContent = lines.slice(0, ++k).join('\n') + (k < lines.length ? '\n> _' : '');
+    if (k >= lines.length) { clearInterval(t); setTimeout(() => { box.classList.add('done'); setTimeout(() => box.remove(), 500); }, 350); }
+  }, 140);
+  box.onclick = () => box.remove();                  // (click to skip)
+})();
+setInterval(() => { $('clock').textContent = new Date().toLocaleTimeString([], {hour: '2-digit', minute: '2-digit', second: '2-digit'}); }, 1000);
 
 // ---------------------------------------------------------------- start
 function refresh() { ({math: loadMath, bot: loadBot, col: loadCol, chat: loadChat, settings: loadSettings})[tab](); }
