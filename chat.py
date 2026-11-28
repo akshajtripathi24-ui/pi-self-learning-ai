@@ -97,6 +97,27 @@ Question: {question}
 Answer: {answer}
 Follow-ups:"""
 
+FOLLOWUPS = """
+After your answer, on a new line, write "Next questions:" and then 2 short follow-up questions the student might ask
+next, separated by " | ". For example:
+Next questions: How do astronauts sleep in space? | Can I see the ISS from my house?"""
+NEXT_MARK = re.compile(r"(?:^|\n|(?<=[.!?)])\s)[\s*#_]*(?:next questions?|follow[- ]?up questions?|follow[- ]?ups?)[\s*_]*:", re.I)
+MARK_WORDS = ("next questions:", "follow-up questions:", "follow up questions:", "followups:")
+
+
+def split_next(raw):
+    """The answer and its follow-up questions are written together: "...the answer. Next questions: A? | B?".
+    Returns (the answer to show, the follow-up part or None). While it's still writing "Next qu...", that bit is hidden."""
+    m = NEXT_MARK.search(raw)
+    if m:
+        return raw[:m.start()].rstrip(), raw[m.end():].lstrip("*_ ")
+    frag = re.split(r"(?<=[.!?)])\s+|\n", raw)[-1]
+    t = frag.strip(" *#_").lower()
+    if len(t) >= 2 and any(w.startswith(t) for w in MARK_WORDS):
+        return raw[:len(raw) - len(frag)].rstrip(), None                 # maybe the start of "Next questions:"
+    return raw, None
+
+
 COMPARE_CHANCE = float(os.environ.get("CHAT_COMPARE_CHANCE", "0.25"))   # about 1 in 4 single questions also gets a
                                                                           # second answer, so you can pick the one you like
 CAREFUL, CREATIVE = 0.4, 0.95  # the two answers' temperatures: careful (sticks to the likeliest words) and creative
@@ -106,9 +127,10 @@ def clean_suggestions(text, question):
     """The AI's follow-up questions, tidied: no numbers or bullets, not too short or long, not your own question again."""
     out = []
     for line in (text or "").split("\n"):
-        t = re.sub(r"^\s*(?:[-*•]|\d+[.)]|follow-?ups?:)\s*", "", line, flags=re.I).strip().strip('"\'')
+        t = re.sub(r"^\s*(?:[-*•]|\d+[.)]|follow-?ups?:)\s*", "", line, flags=re.I).strip().strip('"\'*_ ')
         if not 3 <= len(t.split()) <= 14 or is_refusal(t) or t.lower().rstrip("?") == question.lower().rstrip("?"):
             continue
+        t = t.rstrip(" |").strip()
         if not t.endswith("?") and _is_question(t):
             t += "?"
         if t.lower() not in [o.lower() for o in out]:
@@ -315,6 +337,7 @@ class Chat:
         self.busy, self.busy_chat = False, None
         self.stage, self.stage_since = None, 0
         self.stop_asked = False
+        self.known = {}                    # word -> is it one token? (so each word is only checked once)
 
     @staticmethod
     def _tidy(c):
@@ -385,13 +408,15 @@ class Chat:
             pass
         return True
 
-    def send(self, text, chat_id=None, compare=True, suggest=True):
+    def send(self, text, chat_id=None, compare=True, suggest=True, fix=True):
         """Returns the chat's id (a new chat if chat_id is empty), or None if it's still busy.
-        compare: sometimes write a second answer to choose from. suggest: suggest follow-up questions afterwards."""
+        compare: sometimes write a second answer to choose from. suggest: suggest follow-up questions afterwards.
+        fix: fix the spelling first (not needed for a suggestion you tapped: the AI wrote it, so it's spelled right)."""
         text = " ".join(str(text).split())[:600]
         if not text:
             raise ValueError("Type a question first.")
-        if self.busy and self.stage == "suggesting":          # you asked something new: skip the suggestions
+        self.bot.hold_until = time.time() + 120               # the practice hangs up on the model right away
+        if self.busy and self.stage in ("suggesting", "titling"):   # you asked something new: skip these
             self.stop_asked = True
             for _ in range(100):
                 if not self.busy:
@@ -401,7 +426,7 @@ class Chat:
             if self.busy:
                 return None
             c = self.chats.get(chat_id) or self._new()
-            msg = {"you": text, "fixed": None, "answers": [], "error": None, "time": time.time()}
+            msg = {"you": text, "fixed": None if fix else text, "answers": [], "error": None, "time": time.time()}
             c["messages"].append(msg)
             c["updated"] = time.time()
             if not c["titled"] and len(c["messages"]) == 1:
@@ -424,6 +449,7 @@ class Chat:
             msg = c["messages"][-1]
             msg["answers"], msg["error"], msg["stopped"], msg["suggestions"] = [], None, False, []
             self.busy, self.busy_chat, self.stop_asked = True, c["id"], False
+        self.bot.hold_until = time.time() + 120               # the practice hangs up on the model right away
         threading.Thread(target=self._work, args=(c, msg, True, False, True), daemon=True).start()
         return c["id"]
 
@@ -480,6 +506,24 @@ class Chat:
         found.sort(key=lambda x: (-x[0], -x[1]))
         return found[:n]
 
+    def spelled_right(self, text):
+        """Every word (3 letters or more) is one of the model's tokens, so it's a common, correctly spelled word.
+        Misspelled words get chopped into pieces ("bigest" -> " big" + "est"), and then it runs the spelling fix."""
+        words = {w.split("'")[0].lower() for w in re.findall(r"[A-Za-z]+(?:'[a-z]+)?", text)}
+        for w in sorted(words):
+            if len(w) < 3:
+                continue
+            if w not in self.known:
+                n = self.bot.llm.count_tokens(" " + w)
+                if n is None:
+                    return False                               # can't tell (like with Ollama): fix it to be safe
+                self.known[w] = n == 1
+                if len(self.known) > 5000:
+                    self.known.clear()
+            if not self.known[w]:
+                return False
+        return True
+
     def _set(self, stage):
         self.stage, self.stage_since = stage, time.time()
         self.bot.hold_until = time.time() + 120               # pause the practice while we chat
@@ -491,9 +535,11 @@ class Chat:
             ok, why = llm.check()
             if not ok:
                 raise RuntimeError(why)
-            # 1. fix spelling and grammar (not again, if you asked for a different answer)
-            if again and msg.get("fixed"):
+            # 1. fix spelling and grammar (not again, if you asked for a different answer, or tapped a suggestion)
+            if msg.get("fixed"):
                 fixed = msg["fixed"]
+            elif self.spelled_right(msg["you"]):
+                fixed = msg["you"]                             # nothing misspelled: skip the fixing step (saves 5-8 s)
             else:
                 self._set("fixing")
                 fixed = llm.ask(FIX_PROMPT.format(text=msg["you"]), max_tokens=len(msg["you"]) // 2 + 40, temperature=0)
@@ -533,7 +579,8 @@ class Chat:
                     examples = self._examples(q)
                 guess = None if found else guess_kind(q)          # would one confident answer just be a guess?
                 guess_note = {"why": WHY_NOTE, "opinion": OPINION_NOTE}.get(guess, "")
-                system = ANSWER_SYSTEM + math_note + guess_note
+                wants_next = suggest and q is questions[-1]          # follow-ups come with the last answer
+                system = ANSWER_SYSTEM + math_note + guess_note + (FOLLOWUPS if wants_next else "")
                 if examples:
                     system += "\nHere are similar problems that were solved and checked:\n" + "\n".join(
                         "PROBLEM: %s MATH: %s ANSWER: %s" % (e["problem"], e["math"], e["answer"]) for e in examples)
@@ -554,8 +601,11 @@ class Chat:
                          "memories": list({cid: {"chat": cid, "title": t} for _, _, cid, t, _, _ in memories}.values())}
                 with self.lock:
                     msg["answers"].append(entry)
-                stopped = self._write(entry, convo, 0.85 if again else 0.4)
-                if not stopped and is_refusal(entry["a"]):
+                stopped = self._write(entry, convo, 0.85 if again else 0.4, ends_message=wants_next)
+                if wants_next and entry.get("next_q"):
+                    with self.lock:
+                        msg["suggestions"] = entry["next_q"]        # shown the moment the answer is done
+                if not stopped and not self.stop_asked and is_refusal(entry["a"]):
                     # small models sometimes refuse harmless questions: try once more, simply, without the extras
                     first = entry["a"]
                     with self.lock:
@@ -571,13 +621,13 @@ class Chat:
                                     entry["a"] = first
                             else:
                                 stopped = self._explain(entry, q)
-                elif not stopped and guess and entry["a"] and not HEDGE.search(entry["a"]):
+                elif not stopped and not self.stop_asked and guess and entry["a"] and not HEDGE.search(entry["a"]):
                     # it answered as if it knew for sure ("because it's unhealthy"): ask for the different possible reasons
                     with self.lock:
                         entry["a"], entry["writing"], entry["balanced"] = "", True, True
                     simple = [{"role": "system", "content": ANSWER_SYSTEM + guess_note}, {"role": "user", "content": q}]
                     stopped = self._write(entry, simple, 0.6, stage="balancing")
-                if (compare and len(questions) == 1 and not found and not stopped and entry["a"] and not entry.get("retried")
+                if (compare and len(questions) == 1 and not found and not stopped and not self.stop_asked and entry["a"] and not entry.get("retried")
                         and not entry.get("balanced") and random.random() < COMPARE_CHANCE):
                     stopped = self._second(entry, convo)                  # sometimes: a second answer to choose from
                 with self.lock:
@@ -590,14 +640,15 @@ class Chat:
             if not chat.get("titled") and answered == [msg] and questions and not self.stop_asked:
                 self._set("titling")
                 try:
-                    title = llm.ask(TITLE_PROMPT.format(question=questions[0]), max_tokens=16, temperature=0.3)
+                    title = llm.ask(TITLE_PROMPT.format(question=questions[0]), max_tokens=16, temperature=0.3,
+                                    stop=lambda: self.stop_asked)      # (you can send your next question while it does this)
                 except Exception:
                     title = ""                                         # keep the answer; the title is just the first words
                 with self.lock:
                     if not chat.get("titled"):                         # (unless you renamed it in the meantime)
                         chat["title"], chat["titled"] = clean_title(title, fixed), True
             # 6. follow-up questions you might ask next
-            if suggest and not self.stop_asked:
+            if suggest and not self.stop_asked and not msg.get("suggestions"):
                 last = next((a for a in reversed(msg["answers"]) if a["a"] and not a.get("refused") and not a.get("stopped")), None)
                 if last:
                     self._set("suggesting")
@@ -659,21 +710,31 @@ class Chat:
                 entry["a"] = fallback_reason(q)
         return stopped
 
-    def _write(self, entry, convo, temperature, stage="writing", field="a"):
+    def _write(self, entry, convo, temperature, stage="writing", field="a", ends_message=False):
         """Live typing: stream the answer into entry[field]. Returns True if you pressed Stop."""
         self._set(stage)
         flag = "writing" if field == "a" else "writing_b"
+        raw = [""]
 
         def add(piece):
+            raw[0] += piece
+            shown, nxt = split_next(raw[0])
             with self.lock:
-                entry[field] += piece
+                entry[field] = shown
+                if nxt is not None and field == "a":
+                    if "next" not in entry and ends_message:
+                        self._set("suggesting")         # the answer is done: you can already send your next question
+                    entry["next"] = nxt
         stopped = False
         try:
-            stopped = self.bot.llm.chat_stream(convo, add, stop=lambda: self.stop_asked, max_tokens=260, temperature=temperature)
+            stopped = self.bot.llm.chat_stream(convo, add, stop=lambda: self.stop_asked, max_tokens=300, temperature=temperature)
         finally:                                    # even if the model crashes halfway, it's not "writing" any more
             with self.lock:
                 entry[field] = entry[field].strip()
                 entry[flag] = False
                 if field == "a":
+                    if "next" in entry:              # the follow-ups came after the answer, so the answer is complete
+                        entry["next_q"] = clean_suggestions(entry.pop("next").replace("|", "\n"), entry["q"])
+                        stopped = False
                     entry["stopped"] = stopped
         return stopped

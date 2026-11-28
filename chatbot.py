@@ -336,7 +336,7 @@ class LLM:
             url = self.cfg["llamacpp_url"].rstrip("/") + "/v1/chat/completions"
             body = {"messages": messages, "max_tokens": max_tokens, "temperature": temperature, "stream": True}
         req = urllib.request.Request(url, data=json.dumps(body).encode(), headers={"Content-Type": "application/json"})
-        t0, pieces = time.time(), 0
+        first, pieces = None, 0
         with urllib.request.urlopen(req, timeout=300) as r:
             for raw in r:                                       # one line at a time, as they arrive
                 if stop and stop():
@@ -356,12 +356,33 @@ class LLM:
                     piece = (j.get("message") or {}).get("content") or ""
                 if piece:
                     pieces += 1
+                    first = first or time.time()                # (time it from the first piece, after it read the prompt)
                     on_text(piece)
         if pieces > 3:
-            self.speed = round(pieces / max(0.1, time.time() - t0), 1)
+            self.speed = round((pieces - 1) / max(0.1, time.time() - first), 1)
         return False
 
-    def ask(self, prompt, max_tokens=160, temperature=0.7):
+    def count_tokens(self, text):
+        """How many tokens (pieces) the model splits this text into, or None if it can't tell (only llama.cpp can).
+        Common words are 1 token (" planet"), but misspelled ones get chopped up (" big" + "est")."""
+        if getattr(self, "backend", "ollama") != "llamacpp":
+            return None
+        try:
+            return len(self._post(self.cfg["llamacpp_url"].rstrip("/") + "/tokenize", {"content": text}, timeout=5)["tokens"])
+        except Exception:
+            return None
+
+    def ask(self, prompt, max_tokens=160, temperature=0.7, stop=None):
+        """One question, one answer. With stop (llama.cpp only), it streams the answer, so it can hang up as soon as
+        stop() is true (then it raises Interrupted): that lets the Chat tab cut in line."""
+        if stop and getattr(self, "backend", "ollama") == "llamacpp":
+            if stop():
+                raise Interrupted()
+            pieces = []
+            if self.chat_stream([{"role": "user", "content": prompt}], pieces.append, stop=stop,
+                                max_tokens=max_tokens, temperature=temperature):
+                raise Interrupted()
+            return "".join(pieces)
         if getattr(self, "backend", "ollama") == "ollama":
             r = self._post(self.cfg["ollama_url"].rstrip("/") + "/api/generate",
                            {"model": self.cfg["model"], "prompt": prompt, "stream": False,
@@ -374,6 +395,10 @@ class LLM:
         if r.get("timings", {}).get("predicted_per_second"):
             self.speed = round(r["timings"]["predicted_per_second"], 1)
         return r["choices"][0]["message"]["content"]
+
+
+class Interrupted(Exception):
+    """The Chat tab needed the model, so this practice question was dropped (it isn't counted anywhere)."""
 
 
 DEFAULT_SETTINGS = {"pages": 3, "strict": False, "model": None, "topics": ["arithmetic"]}   # what each experiment changes
@@ -448,7 +473,8 @@ class Chatbot:
         t0 = time.time()
         self.stage, self.stage_since = "teacher", time.time()
         prompt = {"arithmetic": TEACHER_PROMPT, "decimals": DECIMALS_PROMPT, "algebra": ALGEBRA_PROMPT, "calculus": CALCULUS_PROMPT}[kind]
-        teacher = self.llm.ask(prompt.format(topic=topic), max_tokens=170, temperature=0.9)                # 1. teacher
+        chat_waiting = lambda: time.time() < self.hold_until             # the Chat tab needs the model: hang up
+        teacher = self.llm.ask(prompt.format(topic=topic), max_tokens=170, temperature=0.9, stop=chat_waiting)   # 1. teacher
         try:
             problem, math_text, truth, worked = parse_kind(teacher, kind)                                  # 2. checker
             if st["settings"].get("strict"):
@@ -467,7 +493,8 @@ class Chatbot:
                 for e in similar(problem, pages, st["settings"].get("pages", 3))) + "\n\n"
         self.stage, self.stage_since = "student", time.time()
         ask = CALCULUS_STUDENT if kind == "calculus" else STUDENT_PROMPT
-        reply = self.llm.ask(ask.format(examples=examples, problem=problem), max_tokens=200, temperature=0.2)  # 3. student
+        reply = self.llm.ask(ask.format(examples=examples, problem=problem), max_tokens=200, temperature=0.2,
+                             stop=chat_waiting)                                                            # 3. student
         answer, ok = check_answer(kind, reply, truth)
         with self.lock:
             key = "with" if use_notebook else "without"
@@ -508,6 +535,8 @@ class Chatbot:
                     self.new_experiment(s.get("pages", 3), s.get("strict", False), model, s.get("topics"))
             try:
                 self.practice_round()
+            except Interrupted:
+                pass                                # you asked something in the Chat tab: this question is just dropped
             except Exception as e:
                 self.stage = None
                 why = "the model took more than 5 minutes to answer. Is the Pi busy with something else, like the Docking AI?" \

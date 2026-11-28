@@ -322,3 +322,31 @@ Science "why" questions ("why is the sky blue", "why do they put salt on roads")
 **How:** about 1 in 4 single questions also gets a second answer. One is *careful* (temperature 0.4: it picks the most likely words) and one is *creative* (temperature 0.95: it takes more chances). They're shown in a random order, so you can't tell which is which. The one you pick becomes the answer that the chat remembers. The sidebar counts how often you pick careful or creative answers. After a while, that tells you which you really prefer.
 **Problems handled:** pressing Stop while it writes the second answer keeps just the first one. A restart in the middle does the same. You can't pick twice. Math questions never get two answers, since the math is the same either way.
 **Tested:** 12 tests with a pretend model, and clicking through it in a browser: two answers side by side, picking one, the other tucked away, the count in the sidebar, and tapping a suggestion to ask it.
+
+### 41. The chat waited for the practice to finish
+**Problem:** you'd press Send and see "Writing…" with nothing happening. The AI model works on one request at a time, and the Chatbot practice was usually halfway through one of its own (writing a question, or answering one), which can take up to a minute on a Pi. The practice *did* pause for the chat, but only after the request it was on finished.
+**Fix:** the practice now streams its requests (gets the words as they're written), so it can hang up at any moment, the same way ⏹️ Stop works in the chat. When you press Send, it hangs up straight away. The practice question it was on is just dropped: it isn't counted in the scores, the notebook or the "bad questions", so the experiments stay fair.
+**Tested:** a pretend model that handles one request at a time and types slowly, with the practice running nonstop, and 6 chat messages sent at random moments. We timed how long until the answer started:
+
+| | Average wait | Longest |
+|---|---|---|
+| Before | 8.1 s | 9.1 s |
+| After | 2.1 s | 2.1 s |
+
+On a real Pi, one practice request takes 15 to 60 seconds, so the difference there is even bigger.
+
+### 42. Faster everything
+**Goal:** suggestions the moment the answer is done (not "Thinking of follow-up questions…"), and answers that start sooner.
+**What changed:**
+- **Suggestions are written with the answer.** The AI is asked to finish its reply with "Next questions: … | …". That part is hidden from the answer and turned into the suggestion buttons. Before, a separate request had to re-read the question and answer, which took 5 to 15 seconds on a Pi. If the AI forgets the format, a backup step writes them quietly, without any "thinking" message.
+- **The spelling fix only runs when something's misspelled.** We couldn't download a dictionary, so it uses the model's own **tokenizer**, the part that splits text into tokens. Common words are a single token (" planet"), but misspelled words get chopped up (" big" + "est"). If every word is one token, the fixing step is skipped, saving a whole AI step. Asking the tokenizer takes about a thousandth of a second, and works even while the model is busy.
+- **Suggestions you tap skip the spelling fix,** because the AI wrote them.
+- **Naming a new chat no longer blocks you:** you can send while it's doing that.
+- **The math AI's training rests while the chat answers.**
+- **The page checks for new words 3 times a second while it writes** (it was less than 2), and only every 1.5 seconds when idle.
+
+**Problems found while testing:**
+- While the AI was writing "Next questions", the start of it ("Next qu…") flashed in the answer for a moment. Now an unfinished "Next…" at the end is held back until it's clear whether it's the start of the suggestions.
+- Some models wrap it in bold, `**Follow-up questions:**`, which left stray `**` on the suggestions. Those are removed now.
+
+**Tested:** 9 tests with a pretend model (the follow-ups never show in the answer; the suggestions appear while it's still naming the chat; a correctly spelled question skips the fix, and a misspelled one doesn't; sending while it writes the follow-ups goes through at once; a model that ignores the format still gets suggestions). Plus the 14 chat tests, the 30 math questions, and a click-through in a browser.

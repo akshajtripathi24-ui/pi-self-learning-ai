@@ -509,8 +509,14 @@ async function loadChat() {
     const lastMsg = mi === msgs.length - 1 && !c.busy;
     if (m.stopped && !m.answers.length) h += `<div class="bubble ai">⏹️ Stopped before answering.${lastMsg ? '<div class="acts"><button class="act" data-regen="1">🔄 Try again</button></div>' : ''}</div>`;
     if (m.error) h += `<div class="bubble ai" style="border-color:var(--bad)">⚠️ ${esc(m.error)}${lastMsg ? '<div class="acts"><button class="act" data-regen="1">🔄 Try again</button></div>' : ''}</div>`;
-    if (lastMsg && m.suggestions && m.suggestions.length)
-      h += `<div class="suggest">${m.suggestions.map(sg => `<button class="chip" data-ask="${esc(sg)}">↪ ${esc(sg)}</button>`).join('')}</div>`;
+    if (mi === msgs.length - 1) {                        // follow-up questions, right after the answer
+      const lastA = m.answers[m.answers.length - 1];
+      const ready = m.suggestions && m.suggestions.length;
+      const list = ready ? m.suggestions : (lastA && lastA.next ? lastA.next.split('|').map(x => x.trim()).filter(x => x.length > 3) : []);
+      const canAsk = ready && (!c.busy || ['suggesting', 'titling'].includes(c.stage));
+      if (list.length) h += `<div class="suggest">${list.map(sg => canAsk ? `<button class="chip" data-ask="${esc(sg)}">↪ ${esc(sg)}</button>`
+                                                                           : `<span class="chip" style="opacity:.6">↪ ${esc(sg)}</span>`).join('')}</div>`;
+    }
     return h;
   }).join('') || '<p class="muted">Ask your first question below. Try one with mistakes, like: wat is the bigest planet and how far is it</p>';
   if (html !== chatHtml) {
@@ -522,7 +528,7 @@ async function loadChat() {
     log.querySelectorAll('[data-open]').forEach(a => a.onclick = () => openChat(a.dataset.open));
     log.querySelectorAll('[data-say]').forEach(b => b.onclick = () => { const [mi, i] = b.dataset.say.split(':').map(Number); say(msgs[mi].answers[i].a, b); });
     log.querySelectorAll('[data-regen]').forEach(b => b.onclick = regenerate);
-    log.querySelectorAll('[data-ask]').forEach(b => b.onclick = () => { $('chatin').value = b.dataset.ask; sendChat(); });
+    log.querySelectorAll('[data-ask]').forEach(b => b.onclick = () => { $('chatin').value = b.dataset.ask; sendChat(false); });
     log.querySelectorAll('[data-pick]').forEach(b => b.onclick = async () => {
       const [time, index, which] = b.dataset.pick.split('|');
       try { await post('/api/chat/pick', {chat: chatId, time: +time, index: +index, which}); } catch (e) { $('chatstage').textContent = '⚠️ ' + e.message; }
@@ -535,9 +541,9 @@ async function loadChat() {
   }
   const speed = c.speed ? ` · ${c.speed} tokens a second` : '';
   const here = !c.busy_chat || c.busy_chat === chatId;
-  $('chatstage').textContent = !c.busy ? '' : !here ? '⏳ It\'s answering in another chat. Wait a moment…' :
-    (c.stage === 'fixing' ? '✏️ Fixing the spelling and grammar… ' : c.stage === 'answering' ? '🤔 Thinking… ' : c.stage === 'writing' ? '✍️ Writing… ' : c.stage === 'explaining' ? '🤔 It said no, so it\'s working out why… ' : c.stage === 'balancing' ? '⚖️ It guessed one reason, so it\'s looking at the different possibilities… ' : c.stage === 'second' ? '🆚 Writing a second answer for you to compare… ' : c.stage === 'suggesting' ? '💡 Thinking of follow-up questions (you can already ask your next one)… ' : c.stage === 'titling' ? '🏷️ Naming this chat… ' : '⏳ Getting ready… ') + (c.stage_seconds || 0) + ' s' + speed;
-  const suggesting = c.busy && c.stage === 'suggesting';      // you can already send your next question
+  $('chatstage').textContent = !c.busy || c.stage === 'suggesting' ? '' : !here ? '⏳ It\'s answering in another chat. Wait a moment…' :
+    (c.stage === 'fixing' ? '✏️ Fixing the spelling and grammar… ' : c.stage === 'answering' ? '🤔 Thinking… ' : c.stage === 'writing' ? '✍️ Writing… ' : c.stage === 'explaining' ? '🤔 It said no, so it\'s working out why… ' : c.stage === 'balancing' ? '⚖️ It guessed one reason, so it\'s looking at the different possibilities… ' : c.stage === 'second' ? '🆚 Writing a second answer for you to compare… ' : c.stage === 'suggesting' ? '' : c.stage === 'titling' ? '🏷️ Naming this chat (you can already ask your next one)… ' : '⏳ Getting ready… ') + (c.stage_seconds || 0) + ' s' + speed;
+  const suggesting = c.busy && ['suggesting', 'titling'].includes(c.stage);   // you can already send your next question
   $('chatsend').disabled = c.busy && !suggesting;
   $('chatsend').classList.toggle('hide', c.busy && here && !suggesting);
   $('chatstop').classList.toggle('hide', !(c.busy && here) || suggesting);
@@ -546,12 +552,12 @@ async function loadChat() {
   $('chatexport').disabled = !c.chat;
 }
 let chatSending = false;
-async function sendChat() {
+async function sendChat(fix) {                     // fix = false: a suggestion you tapped (already spelled right)
   const text = $('chatin').value.trim();
-  if (!text || chatSending || (chat && chat.busy && chat.stage !== 'suggesting')) return;
+  if (!text || chatSending || (chat && chat.busy && !['suggesting', 'titling'].includes(chat.stage))) return;
   chatSending = true;
   $('chatin').value = '';
-  try { const r = await post('/api/chat/send', {text, chat: chatId, suggest: $('chatsuggest').checked, compare: $('chatcompare').checked}); if (r.chat) { chatId = r.chat.id; store.set('chat', chatId); } }
+  try { const r = await post('/api/chat/send', {text, chat: chatId, suggest: $('chatsuggest').checked, compare: $('chatcompare').checked, fix: fix !== false}); if (r.chat) { chatId = r.chat.id; store.set('chat', chatId); } }
   catch (e) { $('chatin').value = text; $('chatstage').textContent = '⚠️ ' + e.message; }   // give your text back
   finally { chatSending = false; }
   chatAsk++; chatLoading = false;                       // a refresh that started before you sent is out of date
@@ -632,7 +638,10 @@ setTab(tab);
 setInterval(() => { if (tab === 'math') loadMath(); }, 1500);
 setInterval(() => { if (tab === 'bot') loadBot(); }, 3000);
 setInterval(() => { if (tab === 'col') loadCol(); }, 3000);
-setInterval(() => { if (tab === 'chat') loadChat(); }, 600);          // often, so live typing looks smooth
+let chatLast = 0;
+setInterval(() => {                     // 3 times a second while it writes (smooth live typing), every 1.5 s otherwise
+  if (tab === 'chat' && ((chat && chat.busy) || Date.now() - chatLast > 1500)) { chatLast = Date.now(); loadChat(); }
+}, 300);
 window.addEventListener('resize', refresh);
 </script>
 </body>

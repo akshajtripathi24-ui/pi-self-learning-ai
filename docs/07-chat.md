@@ -16,7 +16,7 @@ Like other chatbots, you can have lots of separate chats:
 - **🔄 Try again:** under the last answer. It answers your last message again, a bit more creatively (a higher *temperature*: 0.85 instead of 0.4), so you get a different answer.
 - **🔊 Read aloud:** under every answer. It uses your browser's own voice, so nothing is sent anywhere. Math is read the way you'd say it ("x squared", "the derivative of"). Press it again to stop.
 - **📝 Show the steps:** for algebra and calculus, the math engine shows every step, like "Subtract 5 from both sides: 3x = 15", then "Divide both sides by 3: x = 5". The AI is given the steps too, so its explanation matches.
-- **💡 Follow-up suggestions:** after each answer, it suggests 2 questions you might ask next, like "How do Mars rovers get their power?". Tap one to ask it. Thinking of them takes a few seconds on a Pi, but you don't have to wait: you can send your next question straight away, and it skips them. Turn them off with the switch under your chats.
+- **💡 Follow-up suggestions:** after each answer, it suggests 2 questions you might ask next, like "How do Mars rovers get their power?". Tap one to ask it. The AI writes them at the end of the same reply as the answer (they're hidden from the answer itself), so they pop up the moment the answer is done, with no extra waiting. Turn them off with the switch under your chats.
 - **🆚 Two answers to pick from:** about 1 in 4 times, you get two answers side by side and pick the one you like better with 👍. One is written *carefully* (temperature 0.4) and one *creatively* (temperature 0.95), in a random order so you can't tell which is which. The one you pick becomes the answer (the other one is tucked away under "Show the other one"), and the sidebar counts which kind you pick more often: your own little experiment! It takes about twice as long on a Pi, so you can turn it off with the switch under your chats.
 - **⬇️ Export:** downloads the whole chat as a text file (Markdown, `.md`), including the math engine's steps.
 
@@ -44,6 +44,18 @@ While you chat, the Chatbot's practice **pauses**, so your answers come faster. 
 - **If the Pi restarts while it's writing,** the part it already wrote is kept and marked "interrupted". If it restarted before it wrote anything, the chat says so. Either way, press 🔄 Try again.
 - **If the model takes too long or crashes,** you get a clear message (like "the model took too long") and a 🔄 Try again button, and your chat still gets a title.
 - **If sending fails,** what you typed is put back in the box, so you don't have to type it again.
+
+## ⚡ Making it fast on a Pi
+A Pi 4 writes about 5 words a second, so every step counts. What it does to save time:
+- **It cuts in line.** When you press Send, the Chatbot practice hangs up on the AI model straight away (the question it was on is dropped and doesn't count), instead of making you wait up to a minute for it to finish.
+- **It skips the spelling fix when nothing's misspelled.** It asks the model's tokenizer how it splits each word: common words are one piece (" planet"), but misspelled ones get chopped up (" big" + "est"). If every word is one piece, it skips the fixing step, which saves a whole AI step.
+- **Tapped suggestions skip the fix too,** because the AI wrote them, so they're already spelled right.
+- **Suggestions come with the answer,** instead of a separate step afterwards.
+- **You never wait for extras.** While it names a new chat, you can already send your next question (it then just keeps the first words of your question as the title).
+- **The math AI's training rests while the chat answers,** so the chat gets the whole Pi.
+- **The page checks for new words 3 times a second** while it's writing, so the live typing is smooth (and only every 1.5 seconds when it's idle).
+
+How fast the words themselves come out depends on the Pi's processor. A Pi 5 is about 2 to 3 times faster.
 
 ## Good to know
 - **It's a small AI, so it can be wrong about facts,** especially dates, names and numbers that Python didn't check. Double-check anything important.

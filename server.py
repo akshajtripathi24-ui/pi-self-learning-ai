@@ -158,8 +158,8 @@ class Lab:
                 hot = temp >= 78 or (hot and temp > 70)
             for c in self.all_courses:
                 c.hot = hot
-            if self.math.paused or hot:
-                time.sleep(2)
+            if self.math.paused or hot or self.chat.busy:     # (it rests while the chat answers, so the chat gets the whole Pi)
+                time.sleep(0.5 if self.chat.busy else 2)
                 continue
             course = self.training()
             try:
@@ -345,7 +345,8 @@ class Handler(BaseHTTPRequestHandler):
             if path == "/api/chat/send":
                 try:
                     cid = lab.chat.send(body.get("text", ""), body.get("chat") or None,
-                                        compare=body.get("compare", True) is not False, suggest=body.get("suggest", True) is not False)
+                                        compare=body.get("compare", True) is not False, suggest=body.get("suggest", True) is not False,
+                                        fix=body.get("fix", True) is not False)
                 except ValueError as e:
                     return self._send(400, {"error": str(e)})
                 if not cid:
